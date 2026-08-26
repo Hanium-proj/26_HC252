@@ -1,0 +1,260 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DESIGN TOKENS — "판독실 (The Reading Room)" v2 · light chrome
+   Single source of truth. See DESIGN.md.
+   White clinical chrome with real layered elevation (shadow
+   ladder, not divider lines) + dark film islands for imaging.
+   One deep surgical-teal accent. No green-tinged neutrals.
+   ============================================================ */
+:root {
+  /* --- light chrome surfaces --- */
+  --canvas: #eef0f4;          /* app background (cool paper, not green) */
+  --surface-1: #ffffff;       /* cards, panels, sidebar */
+  --surface-2: #f3f5f8;       /* sunken wells, inputs, segments */
+  --surface-hover: #e9edf2;
+
+  /* --- dark film islands (imaging only) --- */
+  --film: #000000;            /* DICOM film — the only pure black */
+  --letterbox: #0a0c0f;       /* margin around film */
+
+  /* --- hairlines (content-level only, never structural) --- */
+  --hairline: #e7eaef;
+  --border: #d7dde4;
+  --border-strong: #bfc8d2;
+
+  /* --- ink ramp (cool neutral) --- */
+  --ink: #16181d;
+  --ink-2: #5a6472;
+  --ink-3: #97a0ab;
+
+  /* --- accent: deep surgical teal (one primary fill per screen) --- */
+  --accent-text: #0f766e;
+  --accent-fill: #0f766e;
+  --accent-strong: #0c5f59;
+  --accent-ink: #ffffff;      /* ink on top of accent-fill */
+  --accent-brand: #12a594;    /* focus ring, brand mark */
+  --accent-wash: rgba(15, 118, 110, 0.08);
+  --accent-wash-2: rgba(15, 118, 110, 0.14);
+
+  /* --- on-film annotation kit (bright teal reads on black) --- */
+  --film-accent: #0bd8b6;
+  --lesion-active: #38daff;
+
+  /* --- status (always paired with a text label) --- */
+  --critical-text: #c62a2f;
+  --critical-fill: #e5484d;
+  --critical-wash: #feebec;
+  --warning-text: #9d5b00;
+  --warning-fill: #ffb224;
+  --warning-wash: #fff3d0;
+  --ok-text: #1d7f54;
+  --ok-fill: #30a46c;
+  --ok-wash: #e6f6eb;
+  --info-text: #0d74ce;
+  --info-fill: #0090ff;
+  --info-wash: #e6f4fe;
+
+  /* --- elevation ladder: depth instead of divider lines --- */
+  --shadow-1: 0 1px 2px rgba(22, 24, 29, 0.04), 0 2px 6px rgba(22, 24, 29, 0.04),
+    0 12px 28px -16px rgba(22, 24, 29, 0.12);
+  --shadow-2: 0 2px 4px rgba(22, 24, 29, 0.05), 0 10px 24px -8px rgba(22, 24, 29, 0.14);
+  --shadow-3: 0 4px 12px rgba(22, 24, 29, 0.08), 0 16px 40px -8px rgba(22, 24, 29, 0.22);
+  --shadow-sidebar: 12px 0 32px -20px rgba(22, 24, 29, 0.18);
+  --shadow-accent: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 8px -2px rgba(15, 118, 110, 0.45);
+
+  /* --- motion --- */
+  --ease-out: cubic-bezier(0.165, 0.84, 0.44, 1);
+
+  /* --- type --- */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
+    "Apple SD Gothic Neo", sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--hairline);
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    letter-spacing: -0.01em;
+    font-feature-settings: "tnum";
+  }
+
+  ::selection {
+    background: var(--accent-wash-2);
+    color: var(--accent-strong);
+  }
+
+  /* 2px-gap focus ring — keyboard nav is a brand moment */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--canvas), 0 0 0 4px var(--accent-brand);
+    border-radius: 6px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+    border: 3px solid var(--canvas);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+  }
+}
+
+@layer components {
+  /*
+   * Canvas atmosphere: flowing multi-hue mesh (see FlowBackground in
+   * app/layout.tsx — blurred organic bands, not concentric circles) +
+   * visible monochrome grain. Fixed to the viewport — the solid white
+   * sidebar covers its left edge, panels float above it.
+   */
+  .flow-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: var(--canvas);
+  }
+
+  /* Translucent chrome veil so the atmosphere flows under the topbar */
+  .topbar-veil {
+    background: rgba(238, 240, 244, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /* Panel: white sheet lifted off the canvas. Depth, not borders. */
+  .panel {
+    background: var(--surface-1);
+    border-radius: 12px;
+    box-shadow: var(--shadow-1);
+  }
+  .panel-interactive {
+    transition: box-shadow 150ms var(--ease-out), transform 150ms var(--ease-out);
+  }
+  .panel-interactive:hover {
+    box-shadow: var(--shadow-2);
+    transform: translateY(-1px);
+  }
+
+  /* Latin-only micro label: 11px mono uppercase. Never Korean. */
+  .microlabel {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* kbd chip for ⌘K */
+  .kbd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1;
+    color: var(--ink-3);
+    background: var(--surface-2);
+    border-radius: 4px;
+    padding: 4px 5px;
+  }
+
+  /* Purposeful entrance — transform + opacity only */
+  .anim-rise {
+    animation: rise 240ms var(--ease-out) both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .grow-bar {
+    transform-origin: left center;
+    animation: grow 500ms var(--ease-out) both;
+  }
+  @keyframes grow {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* Streaming status text: real step names with a slow shimmer */
+  .shimmer-text {
+    background: linear-gradient(
+      90deg,
+      var(--ink-3) 0%,
+      var(--ink) 50%,
+      var(--ink-3) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 2s linear infinite;
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  .pulse-dot {
+    animation: pulsedot 1.6s var(--ease-out) infinite;
+  }
+  @keyframes pulsedot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
