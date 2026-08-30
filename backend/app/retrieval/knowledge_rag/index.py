@@ -1,6 +1,6 @@
 """[담당 B] 4단계 - Qdrant 인덱스.
 
-인수인계 문서 권장에 따라 컬렉션을 분리한다:
+컬렉션을 분리한다:
   knowledge_guidelines_reviews  - 문헌 (이 파일)
   radiology_cases               - 증례 (case_rag/index.py)
 검색 목적과 metadata 스키마가 달라 한 컬렉션에 섞지 않는다.

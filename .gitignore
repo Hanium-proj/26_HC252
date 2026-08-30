@@ -31,3 +31,13 @@ venv/
 backend/data/
 *.faiss
 *.index
+
+# PhysioNet credentialed 데이터 (MIMIC-CXR / MIMIC-IV-ED)
+# DUA 상 재배포가 금지되므로 private 저장소에도 커밋하지 않는다.
+# 권한이 확인된 로컬/서버에만 보관하고, 저장소에는 파생 인덱스도 올리지 않는다.
+cxr/
+cxr.tar
+MIMIC_CXR_Similar_Case_RAG_v1/
+MIMIC_CXR_Similar_Case_RAG_v1.zip
+mimic-cxr-*
+*.dcm

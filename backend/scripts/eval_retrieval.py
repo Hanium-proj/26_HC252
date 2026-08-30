@@ -1,7 +1,6 @@
 """Knowledge RAG 검색 품질 평가.
 
-인수인계 문서(README_Knowledge_RAG_v1.md 7절)가 지정한 테스트 쿼리 8개로
-Hit@k 를 측정한다.
+테스트 쿼리 8개로 Hit@k 를 측정한다.
 
 정답 문서는 sources.csv 의 target_coverage 에서 도출했다. 예를 들어
 "pneumothorax 소견" 질문의 정답은 target_coverage 에 Pneumothorax 가 있는 문서다.

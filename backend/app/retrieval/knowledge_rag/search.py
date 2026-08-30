@@ -1,6 +1,6 @@
 """[담당 B] 5단계 - 검색. Phase 1 은 dense 단독 + metadata 필터.
 
-인수인계 문서의 단계 구분을 따른다:
+단계 구분은 다음과 같다:
   Phase 1 (현재) - dense retrieval, metadata filtering, top-k 5~8, citation 반환
   Phase 2        - BM25 추가, RRF 융합, cross-encoder reranking
   Phase 3        - query rewrite, sufficiency 평가(CRAG), web search fallback

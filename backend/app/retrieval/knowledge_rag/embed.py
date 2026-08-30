@@ -30,6 +30,9 @@ ENC = tiktoken.get_encoding("cl100k_base")
 # 한도의 절반만 쓰게 된다. 작은 배치로 흘려보내야 실효 처리량이 한도에 근접한다.
 BATCH_TOKENS = 8_000
 
+# 요청당 입력 배열 최대 길이 (OpenAI embeddings API 제약)
+MAX_BATCH_ITEMS = 2_048
+
 # 계정 등급의 분당 토큰 한도. 버킷은 이 값을 60으로 나눈 속도로 연속 리필된다.
 TOKENS_PER_MINUTE = 40_000
 REFILL_PER_SEC = TOKENS_PER_MINUTE / 60.0
@@ -69,14 +72,20 @@ def _client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
-def _batches(texts: list[str], budget: int) -> list[list[int]]:
-    """토큰 예산에 맞춰 인덱스를 묶는다."""
+def _batches(
+    texts: list[str], budget: int, max_items: int = MAX_BATCH_ITEMS
+) -> list[list[int]]:
+    """토큰 예산과 항목 수 상한에 맞춰 인덱스를 묶는다.
+
+    항목 수 상한이 필요한 이유: 짧은 텍스트(리포트 평균 약 97 토큰)를 다룰 때
+    토큰 예산만으로 자르면 배열 길이가 API 상한을 넘는다.
+    """
     out: list[list[int]] = []
     cur: list[int] = []
     cur_tok = 0
     for i, t in enumerate(texts):
         n = len(ENC.encode(t))
-        if cur and cur_tok + n > budget:
+        if cur and (cur_tok + n > budget or len(cur) >= max_items):
             out.append(cur)
             cur, cur_tok = [], 0
         cur.append(i)
@@ -84,6 +93,47 @@ def _batches(texts: list[str], budget: int) -> list[list[int]]:
     if cur:
         out.append(cur)
     return out
+
+
+def embed_stream(
+    texts: list[str],
+    batch_tokens: int = 150_000,
+    max_items: int = MAX_BATCH_ITEMS,
+):
+    """대량 임베딩을 배치 단위로 yield 한다.
+
+    embed_documents 는 전체 벡터를 메모리에 모으므로 수십만 건에는 쓸 수 없다.
+    (3072차원 × 22만 건이면 Python 객체로 수십 GB) 호출자가 배치를 받는 즉시
+    색인하고 버릴 수 있도록 generator 로 제공한다.
+
+    yield: (시작 인덱스, 텍스트 리스트, 벡터 리스트)
+    """
+    settings = get_settings()
+    client = _client()
+    batches = _batches(texts, batch_tokens, max_items)
+
+    for local_idx in batches:
+        batch = [texts[i] for i in local_idx]
+        for attempt in range(6):
+            try:
+                raw = client.embeddings.with_raw_response.create(
+                    model=settings.embedding_model, input=batch
+                )
+                break
+            except RateLimitError:
+                if attempt == 5:
+                    raise
+                time.sleep(2**attempt * 3)
+
+        resp = raw.parse()
+        vectors = [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
+        yield local_idx, batch, vectors
+
+        remaining = int(raw.headers.get("x-ratelimit-remaining-tokens", 0))
+        deficit = batch_tokens - remaining
+        if deficit > 0:
+            limit = int(raw.headers.get("x-ratelimit-limit-tokens", TOKENS_PER_MINUTE))
+            time.sleep(min(deficit / (limit / 60.0), 30.0))
 
 
 def embed_documents(

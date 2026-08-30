@@ -1,6 +1,6 @@
 """[담당 B] 2단계 - Chunking. 페이지 텍스트 -> 검색 단위 chunk + metadata.
 
-인수인계 문서 권장값: chunk 500-900 tokens, overlap 80-150, heading/paragraph 경계 존중.
+권장값: chunk 500-900 tokens, overlap 80-150, heading/paragraph 경계 존중.
 여기서는 700 / 100 을 기본값으로 잡았다.
 
 페이지 경계를 넘어 chunk 를 만드는 이유: PDF 페이지는 물리적 단위일 뿐이라
