@@ -9,7 +9,10 @@ Phase 2 에서 MedCPT 와 8개 테스트 쿼리로 비교 평가할 예정이다
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
+from pathlib import Path
 
 import tiktoken
 from openai import AsyncOpenAI, OpenAI, RateLimitError
@@ -20,33 +23,43 @@ ENC = tiktoken.get_encoding("cl100k_base")
 
 # 배치는 개수가 아니라 *토큰 예산* 으로 자른다. chunk 개수로 자르면 chunk 길이가
 # 들쭉날쭉할 때 요청 하나가 TPM 한도를 넘어 429 가 난다.
-BATCH_TOKENS = 30_000
+#
+# 예산을 한도(40K)보다 훨씬 작게 잡는 이유: OpenAI 의 토큰 버킷은 60초 단위로
+# 한 번에 리셋되는 게 아니라 연속 리필된다(40K/min = 약 666 tok/s).
+# 큰 배치를 쓰면 "버킷이 가득 찰 때까지 대기 -> 한 번에 소진" 패턴이 되어
+# 한도의 절반만 쓰게 된다. 작은 배치로 흘려보내야 실효 처리량이 한도에 근접한다.
+BATCH_TOKENS = 8_000
 
-# 계정 등급별 분당 토큰 한도. 초과하면 429 가 나므로 클라이언트에서 미리 페이싱한다.
+# 계정 등급의 분당 토큰 한도. 버킷은 이 값을 60으로 나눈 속도로 연속 리필된다.
 TOKENS_PER_MINUTE = 40_000
+REFILL_PER_SEC = TOKENS_PER_MINUTE / 60.0
 
 
-class _RateLimiter:
-    """60초 롤링 윈도우 토큰 버킷.
+def _cache_path(model: str) -> Path:
+    return Path(get_settings().qdrant_path).parent / f"embed_cache_{model}.jsonl"
 
-    서버가 429 를 던진 뒤 재시도하는 것보다, 보낼 때 미리 속도를 맞추는 편이
-    전체 소요 시간이 짧고 실패 로그도 안 남는다.
+
+def _key(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:32]
+
+
+def _load_cache(path: Path) -> dict[str, list[float]]:
+    """이전 실행에서 만든 벡터를 재사용한다.
+
+    임베딩은 결정적이고 비용/시간이 드는 연산이라, 중단된 배치를 처음부터
+    다시 도는 것은 낭비다. 텍스트 해시를 키로 캐싱한다.
     """
-
-    def __init__(self, tpm: int = TOKENS_PER_MINUTE) -> None:
-        self.tpm = tpm
-        self._events: list[tuple[float, int]] = []
-
-    def acquire(self, tokens: int) -> None:
-        while True:
-            now = time.monotonic()
-            self._events = [(t, n) for t, n in self._events if now - t < 60.0]
-            used = sum(n for _, n in self._events)
-            if used + tokens <= self.tpm or not self._events:
-                self._events.append((now, tokens))
-                return
-            # 가장 오래된 기록이 윈도우를 벗어날 때까지 대기
-            time.sleep(max(60.0 - (now - self._events[0][0]), 0.1))
+    if not path.exists():
+        return {}
+    cache: dict[str, list[float]] = {}
+    with path.open() as f:
+        for line in f:
+            try:
+                rec = json.loads(line)
+                cache[rec["k"]] = rec["v"]
+            except (json.JSONDecodeError, KeyError):
+                continue  # 중단 시 마지막 줄이 잘렸을 수 있다
+    return cache
 
 
 def _client() -> OpenAI:
@@ -56,20 +69,20 @@ def _client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key)
 
 
-def _batches(texts: list[str], budget: int) -> list[tuple[list[str], int]]:
-    """토큰 예산에 맞춰 입력을 자른다. (배치, 토큰수) 목록을 반환."""
-    out: list[tuple[list[str], int]] = []
-    cur: list[str] = []
+def _batches(texts: list[str], budget: int) -> list[list[int]]:
+    """토큰 예산에 맞춰 인덱스를 묶는다."""
+    out: list[list[int]] = []
+    cur: list[int] = []
     cur_tok = 0
-    for t in texts:
+    for i, t in enumerate(texts):
         n = len(ENC.encode(t))
         if cur and cur_tok + n > budget:
-            out.append((cur, cur_tok))
+            out.append(cur)
             cur, cur_tok = [], 0
-        cur.append(t)
+        cur.append(i)
         cur_tok += n
     if cur:
-        out.append((cur, cur_tok))
+        out.append(cur)
     return out
 
 
@@ -77,41 +90,68 @@ def embed_documents(
     texts: list[str],
     batch_tokens: int = BATCH_TOKENS,
     progress: bool = False,
+    use_cache: bool = True,
 ) -> list[list[float]]:
-    """문서 chunk 를 배치로 벡터화한다. 입력 순서를 그대로 유지한다."""
+    """문서 chunk 를 배치로 벡터화한다. 입력 순서를 그대로 유지한다.
+
+    속도 제어는 응답 헤더(x-ratelimit-remaining-tokens / -reset-tokens)로 한다.
+    클라이언트가 자체 추정한 윈도우보다 서버가 알려주는 잔량이 정확하다.
+    """
     settings = get_settings()
     client = _client()
-    limiter = _RateLimiter()
 
-    batches = _batches(texts, batch_tokens)
-    vectors: list[list[float]] = []
+    cache_file = _cache_path(settings.embedding_model)
+    cache = _load_cache(cache_file) if use_cache else {}
+    keys = [_key(t) for t in texts]
 
-    for i, (batch, n_tok) in enumerate(batches, start=1):
-        limiter.acquire(n_tok)
+    todo = [i for i, k in enumerate(keys) if k not in cache]
+    if progress and cache:
+        print(f"    캐시 재사용 {len(texts) - len(todo)}개, 신규 {len(todo)}개", flush=True)
 
-        for attempt in range(5):
-            try:
-                resp = client.embeddings.create(
-                    model=settings.embedding_model, input=batch
-                )
-                break
-            except RateLimitError:
-                if attempt == 4:
-                    raise
-                # 페이싱을 뚫고 429 가 나면 지수 백오프로 물러선다
-                time.sleep(2**attempt * 5)
+    batches = _batches([texts[i] for i in todo], batch_tokens)
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    done = 0
 
-        # API 가 순서를 보장하지만 index 로 재정렬해 둔다.
-        # 순서가 어긋나면 chunk 와 벡터가 뒤섞여 조용히 잘못된 검색 결과가 나온다.
-        ordered = sorted(resp.data, key=lambda d: d.index)
-        vectors.extend(d.embedding for d in ordered)
+    with cache_file.open("a") as cf:
+        for bi, local_idx in enumerate(batches, start=1):
+            batch_idx = [todo[j] for j in local_idx]
+            batch = [texts[i] for i in batch_idx]
 
-        if progress:
-            print(
-                f"    배치 {i}/{len(batches)} · {len(vectors)}/{len(texts)} chunk",
-                flush=True,
-            )
-    return vectors
+            for attempt in range(6):
+                try:
+                    raw = client.embeddings.with_raw_response.create(
+                        model=settings.embedding_model, input=batch
+                    )
+                    break
+                except RateLimitError:
+                    if attempt == 5:
+                        raise
+                    time.sleep(2**attempt * 3)
+
+            resp = raw.parse()
+            # API 가 순서를 보장하지만 index 로 재정렬해 둔다. 순서가 어긋나면
+            # chunk 와 벡터가 뒤섞여 오류 없이 잘못된 검색 결과가 나온다.
+            for d in sorted(resp.data, key=lambda d: d.index):
+                i = batch_idx[d.index]
+                cache[keys[i]] = d.embedding
+                cf.write(json.dumps({"k": keys[i], "v": d.embedding}) + "\n")
+            cf.flush()
+
+            done += len(batch)
+            if progress and (bi % 5 == 0 or bi == len(batches)):
+                print(f"    배치 {bi}/{len(batches)} · {done}/{len(todo)} chunk", flush=True)
+
+            # 서버가 알려준 잔량으로 다음 요청 시점을 정한다.
+            #
+            # reset-tokens 헤더는 버킷이 *가득 찰* 때까지의 시간이라 그대로 자면
+            # 필요 이상으로 쉬게 된다. 다음 배치에 모자란 만큼만 리필을 기다린다.
+            if bi < len(batches):
+                remaining = int(raw.headers.get("x-ratelimit-remaining-tokens", 0))
+                deficit = batch_tokens - remaining
+                if deficit > 0:
+                    time.sleep(min(deficit / REFILL_PER_SEC, 30.0))
+
+    return [cache[k] for k in keys]
 
 
 def embed_query(text: str) -> list[float]:
