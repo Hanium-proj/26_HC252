@@ -22,9 +22,22 @@ class Settings(BaseSettings):
     runpod_base_url: str = ""
     runpod_api_key: str = ""
 
-    # RAG
+    # RAG - 임베딩
+    openai_api_key: str = ""
+    embedding_model: str = "text-embedding-3-large"
+    embedding_dim: int = 3072
+
+    # RAG - Qdrant. qdrant_url 이 비면 qdrant_path 로컬 파일 모드
+    qdrant_path: str = "data/qdrant"
+    qdrant_url: str = ""
+    qdrant_api_key: str = ""
+    knowledge_collection: str = "knowledge_guidelines_reviews"
+    case_collection: str = "radiology_cases"
+
+    # RAG - 코퍼스
+    corpus_dir: str = "data/knowledge_rag_v1"
+
     ncbi_api_key: str = ""
-    vector_db_url: str = ""
 
     # LLM
     llm_base_url: str = ""

@@ -11,13 +11,15 @@ python-multipart==0.0.20
 # langchain-core==0.3.28
 
 # --- [담당 B] Retrieval & Trust ---
-# transformers==4.47.1      # MedCPT
-# torch==2.5.1
+pypdf==5.1.0              # PDF 텍스트 추출
+tiktoken==0.8.0           # 토큰 단위 chunking
+openai==1.59.3            # text-embedding-3-large
+qdrant-client==1.12.2     # 벡터 인덱스
+# Phase 2 (하이브리드 검색) 에서 활성화
 # rank-bm25==0.2.2
 # sentence-transformers==3.3.1   # cross-encoder reranking
-# biopython==1.84           # PubMed/PMC Entrez
-# lxml==5.3.0               # JATS XML 파싱
-# pgvector==0.3.6
+# transformers==4.47.1           # MedCPT 비교 평가용
+# torch==2.5.1
 
 # --- 개발 ---
 pytest==8.3.4

@@ -1,0 +1,31 @@
+Knowledge RAG v1 — Architecture
+
+CXR + Clinical Information
+          |
+          v
+Vision / Multimodal Model
+          |
+          | predictions / CAM / confidence / uncertainty
+          v
+       LLM Agent
+          |
+          v
+      Tool Router
+       /   |    \
+      /    |     \
+Knowledge Case   Web
+  RAG     RAG   Search
+   |       |
+Guideline Similar radiology
++ Review   reports/cases
+      \    /
+       \  /
+        \/
+ Evidence Synthesis
+        |
+        v
+Explanation + Sources + Additional Checks + Guidance
+
+Recommended Qdrant collections:
+- knowledge_guidelines_reviews
+- radiology_cases
