@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
-from app.schemas.common import EvidenceKind, Verdict
+from app.schemas.common import EvidenceType, Verdict
 from app.schemas.evidence import EvidenceItem, EvidencePacket
 from app.schemas.verdict import ClaimVerdict, Conflict, FinalEvidence
-from app.trust.scoring import is_positive, score
+from app.trust.normalize import Normalized, normalize
+from app.trust.scoring import score
 
 # 판정 임계값. 검증셋 확보 전까지는 임의값이며 캘리브레이션 대상이다.
 ACCEPT_THRESHOLD = 0.35
@@ -17,29 +18,24 @@ REJECT_THRESHOLD = 0.35
 CONFLICT_RATIO = 0.5
 
 
-def _split(items: list[EvidenceItem]) -> tuple[list, list, list]:
-    """근거를 지지 / 반대 / 판정불가로 나눈다."""
-    pro, con, neutral = [], [], []
-    for it in items:
-        p = is_positive(it)
-        (pro if p is True else con if p is False else neutral).append(it)
-    return pro, con, neutral
+def _total(ns: list[Normalized]) -> float:
+    return sum(score(n) for n in ns)
 
 
-def _total(items: list[EvidenceItem]) -> float:
-    return sum(score(it) for it in items)
-
-
-def resolve_claim(claim: str, items: list[EvidenceItem], missing: bool) -> ClaimVerdict:
+def resolve_claim(
+    claim: str, group: list[Normalized], missing: bool
+) -> ClaimVerdict:
     """주장 하나를 판정한다."""
-    pro, con, neutral = _split(items)
+    pro = [n for n in group if n.verdict is True]
+    con = [n for n in group if n.verdict is False]
+    neutral = [n for n in group if n.verdict is None]
     s_pro, s_con = _total(pro), _total(con)
 
     conflict = None
     if pro and con and min(s_pro, s_con) >= CONFLICT_RATIO * max(s_pro, s_con):
         # 영상 근거는 이 환자의 개별 사실이므로 일반론인 문헌보다 우선한다
-        img_pro = [i for i in pro if i.kind is EvidenceKind.IMAGE]
-        img_con = [i for i in con if i.kind is EvidenceKind.IMAGE]
+        img_pro = [n for n in pro if n.item.evidence_type is EvidenceType.MODEL]
+        img_con = [n for n in con if n.item.evidence_type is EvidenceType.MODEL]
         resolved = None
         if img_pro and not img_con:
             resolved = True
@@ -47,7 +43,7 @@ def resolve_claim(claim: str, items: list[EvidenceItem], missing: bool) -> Claim
             resolved = False
         conflict = Conflict(
             claim=claim,
-            items=pro + con,
+            items=[n.item for n in pro + con],
             description=(
                 f"지지 {len(pro)}건(신뢰도 {s_pro:.3f}) 대 "
                 f"반대 {len(con)}건(신뢰도 {s_con:.3f})"
@@ -60,7 +56,7 @@ def resolve_claim(claim: str, items: list[EvidenceItem], missing: bool) -> Claim
     if missing:
         verdict = Verdict.NEED_MORE_EVIDENCE
         rationale = "Planner 가 요구한 근거를 수집하지 못함"
-    elif not items:
+    elif not group:
         verdict = Verdict.NEED_MORE_EVIDENCE
         rationale = "해당 주장에 대한 근거 없음"
     elif conflict is not None:
@@ -81,26 +77,24 @@ def resolve_claim(claim: str, items: list[EvidenceItem], missing: bool) -> Claim
         rationale = f"반대 근거 신뢰도 {s_con:.3f} 이 우세"
     else:
         verdict = Verdict.NEED_MORE_EVIDENCE
-        rationale = (
-            f"근거 신뢰도가 임계값 미달 (지지 {s_pro:.3f}, 반대 {s_con:.3f})"
-        )
+        rationale = f"근거 신뢰도가 임계값 미달 (지지 {s_pro:.3f}, 반대 {s_con:.3f})"
+
+    if neutral:
+        rationale += f". 판정불가 근거 {len(neutral)}건은 맥락으로만 사용"
 
     return ClaimVerdict(
         claim=claim,
         verdict=verdict,
         trust_score=round(min(max(s_pro, 0.0), 1.0), 4),
-        supporting=pro,
-        opposing=con,
+        supporting=[n.item for n in pro],
+        opposing=[n.item for n in con],
         conflict=conflict,
-        rationale=rationale + (f". 판정불가 근거 {len(neutral)}건 제외" if neutral else ""),
+        rationale=rationale,
     )
 
 
 def _overall(verdicts: list[ClaimVerdict]) -> Verdict:
-    """케이스 전체 상태. 가장 보수적인 판정을 따른다.
-
-    주장 하나라도 근거가 부족하면 케이스 전체를 확정할 수 없다.
-    """
+    """케이스 전체 상태. 가장 보수적인 판정을 따른다."""
     if not verdicts:
         return Verdict.NEED_MORE_EVIDENCE
     order = [
@@ -113,29 +107,44 @@ def _overall(verdicts: list[ClaimVerdict]) -> Verdict:
 
 
 async def resolve(
-    packet: EvidencePacket, retrieved: list[EvidenceItem]
+    packet: EvidencePacket, retrieved: list[EvidenceItem] | None = None
 ) -> FinalEvidence:
     """주장별로 근거를 모아 최종 판정을 만든다."""
-    by_claim: dict[str, list[EvidenceItem]] = {}
-    for it in list(packet.items) + list(retrieved):
-        by_claim.setdefault(it.claim, []).append(it)
+    normalized = normalize(packet, retrieved)
 
-    missing = set(packet.missing_evidence)
+    groups: dict[str, list[Normalized]] = {}
+    for n in normalized:
+        groups.setdefault(n.claim_key, []).append(n)
+
+    # 검증 대상이 특정되지 않은 근거는 별도 주장으로 세우지 않는다.
+    # 'unknown' 에 대해 ACCEPT 가 나오면 존재하지 않는 소견을 승인하게 된다.
+    unusable = [k for k, g in groups.items() if not any(n.usable for n in g)]
+    for k in unusable:
+        groups.pop(k)
+
+    missing = bool(packet.missing_evidence())
     verdicts = [
-        resolve_claim(claim, items, missing=claim in missing)
-        for claim, items in by_claim.items()
+        resolve_claim(claim, group, missing=missing)
+        for claim, group in groups.items()
     ]
 
     citations = [
-        {"claim": it.claim, **it.evidence}
-        for it in retrieved
-        if it.kind is EvidenceKind.LITERATURE and it.evidence
+        {"claim": n.claim_key, **n.item.metadata}
+        for n in normalized
+        if n.item.evidence_type is EvidenceType.LITERATURE and n.item.metadata
     ]
 
+    limitations = list(packet.limitations)
+    if unusable:
+        limitations.append(
+            f"검증 대상이 특정되지 않아 제외한 근거 {len(unusable)}건: {unusable}"
+        )
+
     return FinalEvidence(
-        case_id=packet.case_id,
-        query=packet.query,
+        query=packet.query.question,
+        task_type=packet.plan.task_type,
         verdicts=verdicts,
         citations=citations,
-        overall=_overall(verdicts),
+        limitations=limitations,
+        overall=_overall(verdicts) if verdicts else Verdict.NEED_MORE_EVIDENCE,
     )

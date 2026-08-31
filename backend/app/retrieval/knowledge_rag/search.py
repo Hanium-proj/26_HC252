@@ -20,7 +20,7 @@ from app.retrieval.knowledge_rag import bm25, fusion, rerank
 from app.retrieval.knowledge_rag.embed import aembed_query, embed_query
 from app.retrieval.knowledge_rag.index import get_client
 from app.retrieval.knowledge_rag.translate import atranslate_query, translate_query
-from app.schemas.common import EvidenceKind, ToolName
+from app.schemas.common import EvidenceType, ToolName
 from app.schemas.evidence import EvidenceItem
 
 # 문서 유형별 기본 권위도. guideline 은 학회 합의 문서라 단일 리뷰보다 무겁다.
@@ -121,15 +121,18 @@ async def search(
         pl = p.payload
         items.append(
             EvidenceItem(
-                claim=claim,
-                tool=ToolName.KNOWLEDGE_RAG,
-                kind=EvidenceKind.LITERATURE,
-                result=pl["text"],
+                source=ToolName.KNOWLEDGE,
+                # 문헌 근거의 claim 은 소견 판정이 아니라 인용문이다.
+                # 지지/반대로 환원되지 않으며 맥락 근거로만 쓰인다.
+                claim=pl["text"],
+                evidence_type=EvidenceType.LITERATURE,
                 # 코사인 유사도는 -1~1 이지만 OpenAI 임베딩 실사용 범위는 양수다.
                 # 0~1 로 clamp 해 EvidenceItem 제약을 만족시킨다
                 confidence=round(max(0.0, min(1.0, p.score)), 3),
-                quality=quality_score(pl),
-                evidence={
+                metadata={
+                    # 정규화 계층이 이 필드로 검증 대상을 잡는다
+                    "finding": claim,
+                    "quality": quality_score(pl),
                     "chunk_id": pl["chunk_id"],
                     "doc_id": pl["doc_id"],
                     "title": pl["title"],

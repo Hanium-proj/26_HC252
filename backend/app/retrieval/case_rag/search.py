@@ -14,7 +14,7 @@ from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 from app.core.config import get_settings
 from app.retrieval.knowledge_rag.embed import aembed_query, embed_query
 from app.retrieval.knowledge_rag.index import get_client
-from app.schemas.common import EvidenceKind, ToolName
+from app.schemas.common import EvidenceType, ToolName
 from app.schemas.evidence import EvidenceItem
 
 # 증례 근거의 신뢰도는 표본 수에 따라 달라진다. 유사 사례 2건으로 내린 판단과
@@ -109,17 +109,21 @@ async def search(
 
     return [
         EvidenceItem(
-            claim=claim,
-            tool=ToolName.CASE_RAG,
-            kind=EvidenceKind.CASE,
-            result=ratio >= 0.5,
+            source=ToolName.CASE,
+            claim=(
+                f"유사 사례 {len(hits)}건 중 {int(ratio*len(hits))}건에서 "
+                f"{claim} 관찰"
+            ),
+            evidence_type=EvidenceType.CASE,
             # 검색 유사도와 소견 일치율을 함께 반영한다. 유사하지 않은 사례가
             # 우연히 같은 소견을 가진 경우를 걸러내기 위함이다.
             confidence=round(max(0.0, min(1.0, mean_score * ratio)), 3),
-            quality=support_quality(hits),
-            evidence={
-                "n_cases": len(hits),
+            metadata={
+                "finding": claim,
+                "quality": support_quality(hits),
+                # 정규화 계층이 이 비율로 지지/반대를 판정한다
                 "agreement_ratio": round(ratio, 3),
+                "n_cases": len(hits),
                 "mean_similarity": round(mean_score, 3),
                 "case_ids": [h.payload["case_id"] for h in hits],
                 "examples": [h.summary for h in hits[:3]],
