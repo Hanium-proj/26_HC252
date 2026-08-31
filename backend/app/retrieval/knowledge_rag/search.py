@@ -16,8 +16,10 @@ from typing import Any
 from qdrant_client.models import FieldCondition, Filter, MatchAny
 
 from app.core.config import get_settings
+from app.retrieval.knowledge_rag import bm25, fusion, rerank
 from app.retrieval.knowledge_rag.embed import aembed_query, embed_query
 from app.retrieval.knowledge_rag.index import get_client
+from app.retrieval.knowledge_rag.translate import atranslate_query, translate_query
 from app.schemas.common import EvidenceKind, ToolName
 from app.schemas.evidence import EvidenceItem
 
@@ -140,3 +142,107 @@ async def search(
             )
         )
     return items
+
+
+# ---------------------------------------------------------------- Phase 2
+
+# 융합 단계에서 각 검색기가 내놓을 후보 수. 최종 top_k 보다 넉넉해야
+# 리랭커가 재정렬할 여지가 생긴다.
+CANDIDATE_K = 30
+
+
+def dense_candidates(query: str, limit: int, coverage=None, doc_types=None):
+    settings = get_settings()
+    return get_client().query_points(
+        collection_name=settings.knowledge_collection,
+        query=embed_query(query),
+        limit=limit,
+        query_filter=_build_filter(coverage, doc_types),
+        with_payload=True,
+    ).points
+
+
+def hybrid_search(
+    query: str,
+    top_k: int = 8,
+    coverage: list[str] | None = None,
+    doc_types: list[str] | None = None,
+    use_translation: bool = True,
+    use_bm25: bool = True,
+    use_rerank: bool = True,
+) -> list[SearchHit]:
+    """Phase 2 하이브리드 검색.
+
+        질의 번역 -> dense + BM25 -> RRF 융합 -> cross-encoder 리랭킹
+
+    각 단계는 개별로 끌 수 있다. 평가에서 단계별 기여도를 분리해 측정하기 위함이다.
+    """
+    q = translate_query(query) if use_translation else query
+
+    dense = dense_candidates(q, CANDIDATE_K, coverage, doc_types)
+    lists = [dense]
+    if use_bm25:
+        sparse = bm25.search(q, top_k=CANDIDATE_K)
+        # 메타데이터 필터는 dense 쪽에만 걸리므로 sparse 결과도 같은 조건으로 거른다
+        if coverage:
+            sparse = [
+                h for h in sparse
+                if set(h.payload.get("target_coverage", [])) & set(coverage)
+            ]
+        if doc_types:
+            sparse = [h for h in sparse if h.payload.get("document_type") in doc_types]
+        if sparse:
+            lists.append(sparse)
+
+    fused = fusion.rrf(lists, key=lambda h: h.payload["chunk_id"])
+
+    if use_rerank and rerank.is_available() and fused:
+        pool = [item for _, _, item in fused[:CANDIDATE_K]]
+        ranked = rerank.rerank(q, pool, text_of=lambda h: h.payload["text"], top_k=top_k)
+        return [
+            SearchHit(score=score, text=item.payload["text"], payload=item.payload)
+            for score, item in ranked
+        ]
+
+    return [
+        SearchHit(score=score, text=item.payload["text"], payload=item.payload)
+        for _, score, item in fused[:top_k]
+    ]
+
+
+async def hybrid_search_async(
+    query: str, top_k: int = 8, coverage: list[str] | None = None
+) -> list[SearchHit]:
+    """FastAPI 라우트용. 번역과 임베딩만 비동기이고 나머지는 CPU 작업이다."""
+    settings = get_settings()
+    q = await atranslate_query(query)
+    dense = get_client().query_points(
+        collection_name=settings.knowledge_collection,
+        query=await aembed_query(q),
+        limit=CANDIDATE_K,
+        query_filter=_build_filter(coverage, None),
+        with_payload=True,
+    ).points
+
+    lists = [dense]
+    sparse = bm25.search(q, top_k=CANDIDATE_K)
+    if coverage:
+        sparse = [
+            h for h in sparse
+            if set(h.payload.get("target_coverage", [])) & set(coverage)
+        ]
+    if sparse:
+        lists.append(sparse)
+
+    fused = fusion.rrf(lists, key=lambda h: h.payload["chunk_id"])
+    if rerank.is_available() and fused:
+        pool = [item for _, _, item in fused[:CANDIDATE_K]]
+        ranked = rerank.rerank(q, pool, text_of=lambda h: h.payload["text"], top_k=top_k)
+        return [
+            SearchHit(score=s, text=it.payload["text"], payload=it.payload)
+            for s, it in ranked
+        ]
+    return [
+        SearchHit(score=s, text=it.payload["text"], payload=it.payload)
+        for _, s, it in fused[:top_k]
+    ]

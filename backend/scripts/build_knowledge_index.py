@@ -52,6 +52,14 @@ def main() -> None:
     info = client.get_collection(settings.knowledge_collection)
     print(f"    {n}개 저장 · 컬렉션 count={info.points_count}")
 
+    # BM25 는 인메모리 인덱스라 chunk 원문을 별도로 남긴다
+    import json
+
+    dump = Path(settings.qdrant_path).parent / "knowledge_chunks.json"
+    dump.parent.mkdir(parents=True, exist_ok=True)
+    dump.write_text(json.dumps([c.to_payload() for c in chunks], ensure_ascii=False))
+    print(f"    BM25 원본 저장: {dump} ({len(chunks)}건)")
+
     print(f"\n완료. 총 {time.time()-t0:.1f}초")
 
 

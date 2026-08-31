@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-large"
     embedding_dim: int = 3072
 
+    # Phase 2 - 질의 번역 및 리랭킹
+    translate_model: str = "gpt-4o-mini"
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rrf_k: int = 60
+
     # RAG - Qdrant. qdrant_url 이 비면 qdrant_path 로컬 파일 모드
     qdrant_path: str = "data/qdrant"
     qdrant_url: str = ""
