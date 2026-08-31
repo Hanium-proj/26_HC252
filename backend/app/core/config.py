@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     app_name: str = "chest-ai-backend"
     environment: str = "development"
 
+    # 설정되면 보호 엔드포인트에 X-API-Key 헤더 검사가 걸린다.
+    # MIMIC 파생 데이터를 반환하는 /cases 는 배포 시 반드시 설정해야 한다.
+    api_key: str = ""
+
     # CORS - Vercel 프론트 도메인. 쉼표로 여러 개
     allowed_origins: str = "http://localhost:3000"
 
