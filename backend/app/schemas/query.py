@@ -2,45 +2,48 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import ToolName
+from app.schemas.common import TaskType, ToolName
 
 
-class QueryType(str, Enum):
-    """질문 유형. 어떤 근거가 필요한지를 결정한다."""
+class QueryInput(BaseModel):
+    """사용자 입력."""
 
-    EXISTENCE = "existence"        # "흉수 있나요?"        -> classifier
-    LOCALIZATION = "localization"  # "어디에 있나요?"      -> classifier + localizer
-    QUANTIFICATION = "quantification"  # "얼마나 심한가요?" -> quantifier
-    COMPARISON = "comparison"      # "이전보다 나빠졌나요?" -> classifier + quantifier(prior)
-    KNOWLEDGE = "knowledge"        # "이 소견의 의미는?"   -> knowledge_rag
-    OUT_OF_SCOPE = "out_of_scope"  # Gatekeeper 가 차단
+    question: str
+    image_path: str | None = None
+    context: dict[str, Any] = Field(default_factory=dict)
 
-
-class RequiredEvidence(BaseModel):
-    """Planner 가 '이 근거는 반드시 있어야 한다'고 선언한 항목."""
-
-    claim: str
-    tool: ToolName
-    required: bool = Field(
-        default=True, description="False 면 있으면 좋은 보조 근거"
-    )
-    reason: str = Field(default="", description="왜 이 근거가 필요한지")
+    @property
+    def targets(self) -> list[str]:
+        return list(self.context.get("targets", []))
 
 
-class QueryPlan(BaseModel):
-    """Planner 출력. tool orchestration 의 실행 계획서."""
+class Plan(BaseModel):
+    """Planner 출력. 도구 호출 실행 계획서."""
 
-    case_id: str
-    query: str
-    query_type: QueryType
-    required_evidence: list[RequiredEvidence] = Field(default_factory=list)
-    tool_order: list[ToolName] = Field(
-        default_factory=list, description="호출 순서. 앞 도구 결과가 뒤 도구 입력이 됨"
-    )
-    rejected_reason: str | None = Field(
-        default=None, description="Gatekeeper 차단 시 사유"
-    )
+    task_type: TaskType
+    target: str | None = None
+    targets: list[str] = Field(default_factory=list)
+
+    required_evidence: list[str] = Field(default_factory=list)
+    supporting_evidence: list[str] = Field(default_factory=list)
+    optional_evidence: list[str] = Field(default_factory=list)
+    knowledge_requirements: list[str] = Field(default_factory=list)
+
+    tool_call_order: list[ToolName] = Field(default_factory=list)
+    expected_output_format: str = ""
+
+    def resolved_targets(self) -> list[str]:
+        """유효한 검증 대상 목록.
+
+        target 과 targets 중복을 제거한다. Planner 가 target 만 채우는 경우와
+        targets 만 채우는 경우가 모두 있기 때문이다.
+        """
+        out: dict[str, None] = {}
+        for t in ([self.target] if self.target else []) + self.targets:
+            if t:
+                out.setdefault(t, None)
+        return list(out)

@@ -8,3 +8,16 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# FastAPI 는 Query/Path/Depends 를 인자 기본값으로 쓰는 것이 표준 관용이다.
+# B008 (기본값에서 함수 호출 금지) 은 이 경우 오탐이므로 예외 처리한다.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+]
