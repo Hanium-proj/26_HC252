@@ -41,3 +41,6 @@ MIMIC_CXR_Similar_Case_RAG_v1/
 MIMIC_CXR_Similar_Case_RAG_v1.zip
 mimic-cxr-*
 *.dcm
+
+# Vercel CLI link metadata
+.vercel/

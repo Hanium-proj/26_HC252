@@ -104,11 +104,13 @@ export function ProbBar({
   threshold,
   level = "neutral",
   className = "",
+  delay = 0,
 }: {
   value: number;
   threshold?: number;
   level?: Level;
   className?: string;
+  delay?: number; // ms, staggers the grow animation in a list
 }) {
   const above = threshold === undefined || value >= threshold;
   const fill = !above
@@ -120,7 +122,7 @@ export function ProbBar({
     <div className={`relative h-1 w-full rounded-sm bg-hairline ${className}`}>
       <div
         className="grow-bar absolute inset-y-0 left-0 rounded-sm"
-        style={{ width: `${Math.round(value * 100)}%`, background: fill }}
+        style={{ width: `${Math.round(value * 100)}%`, background: fill, animationDelay: delay ? `${delay}ms` : undefined }}
       />
       {threshold !== undefined && (
         <span
@@ -203,14 +205,20 @@ export function Disclaimer({ className = "" }: { className?: string }) {
 export function PrimaryButton({
   children,
   className = "",
+  onClick,
+  disabled,
 }: {
   children: ReactNode;
   className?: string;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`inline-flex h-9 items-center justify-center gap-2 rounded-md bg-accent-fill px-4 text-[13px] font-semibold text-accent-ink shadow-accent transition-all duration-150 ease-out hover:bg-accent-strong active:scale-[0.97] ${className}`}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-9 items-center justify-center gap-2 rounded-md bg-accent-fill px-4 text-[13px] font-semibold text-accent-ink shadow-accent transition-all duration-150 ease-out hover:bg-accent-strong active:scale-[0.97] disabled:cursor-progress disabled:opacity-70 disabled:active:scale-100 ${className}`}
     >
       {children}
     </button>
@@ -220,13 +228,19 @@ export function PrimaryButton({
 export function GhostButton({
   children,
   className = "",
+  onClick,
+  active,
 }: {
   children: ReactNode;
   className?: string;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
+      aria-pressed={active}
       className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-surface-2 px-3 text-[12.5px] font-medium text-ink-2 transition-colors duration-150 ease-out hover:bg-surface-hover hover:text-ink active:scale-[0.97] ${className}`}
     >
       {children}

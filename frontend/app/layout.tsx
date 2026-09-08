@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
+import { DemoProvider } from "@/lib/demo/store";
 
 export const metadata: Metadata = {
   title: "Chest AI · 판독실",
@@ -78,13 +79,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko">
       <body>
         <FlowBackground />
-        <div className="relative flex min-h-screen">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Topbar />
-            <main className="flex-1 px-7 py-6">{children}</main>
+        <DemoProvider>
+          <div className="relative flex min-h-screen">
+            <Sidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Topbar />
+              <main className="flex-1 px-7 py-6">{children}</main>
+            </div>
           </div>
-        </div>
+        </DemoProvider>
       </body>
     </html>
   );
