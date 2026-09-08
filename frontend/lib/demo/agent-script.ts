@@ -212,14 +212,35 @@ const compare: AgentScript = {
   match: /과거|비교|이전|prior|변화/i,
   citations: 1,
   verdict: () => ({ overall: "ACCEPT", agreement: 0.7 }),
-  steps: () => [
-    { name: "질문 이해", ms: 450 },
-    { name: "과거 영상 불러오기", tool: "흉부 영상 분석", ms: 900, detail: `${PRIOR_DATE} PA 1건` },
-    { name: "두 시점 정합 · 차이 계산", tool: "흉부 영상 분석", ms: 1200, detail: "차이 영역 1곳" },
-    { name: "근거 통합", ms: 700 },
-  ],
+  steps: (c) =>
+    c.prior === null
+      ? [
+          { name: "질문 이해", ms: 450 },
+          { name: "과거 영상 조회", tool: "흉부 영상 분석", ms: 900, detail: "저장된 이전 검사 없음" },
+          { name: "근거 통합", ms: 600 },
+        ]
+      : [
+          { name: "질문 이해", ms: 450 },
+          { name: "과거 영상 불러오기", tool: "흉부 영상 분석", ms: 900, detail: `${PRIOR_DATE} PA 1건` },
+          { name: "두 시점 정합 · 차이 계산", tool: "흉부 영상 분석", ms: 1200, detail: "차이 영역 1곳" },
+          { name: "근거 통합", ms: 700 },
+        ],
   blocks: (c) => {
     const top = c.findings[0];
+    if (c.prior === null) {
+      return [
+        {
+          type: "p",
+          text: `이 환자는 저장된 이전 흉부 촬영이 없어 시점 비교를 할 수 없습니다. 이번 검사를 기준 영상으로 등록하고, 치료 후 재촬영에서 ${top.note} 영역의 변화를 비교하는 것을 제안합니다.`,
+          cites: [image],
+        },
+        {
+          type: "checklist",
+          title: "비교 판독 준비",
+          items: ["이번 검사를 기준(baseline) 영상으로 등록", ...nextSteps(c).slice(1, 2), "재촬영 시 같은 자세(앙와위 여부) 유지 — 심흉곽비 비교 오차 방지"],
+        },
+      ];
+    }
     if (top.en === "NO FINDING") {
       return [
         { type: "p", text: `${PRIOR_DATE} 촬영과 정합한 결과 새로 나타난 음영이나 윤곽 변화가 없습니다. 심흉곽비와 횡격막 높이도 이전과 같은 범위입니다.`, cites: [image] },
@@ -429,7 +450,120 @@ const edema: AgentScript = {
     },
     { type: "checklist", title: "추가 확인 제안", items: ["BNP · 심초음파로 심인성 여부 확인", "이뇨제 투여 후 6-12시간 내 재촬영", "산소 공급 · 산소포화도 지속 감시"] },
   ],
-  followups: () => ["다음에 어떤 검사가 필요한가요?", "이 검사의 근거 영역을 설명해 주세요"],
+  followups: () => ["앙와위 AP 촬영이라 보정이 필요한 소견은?", "이뇨제 반응 평가를 위한 재촬영 시점과 호전 기준은?"],
+};
+
+/* Scenario turn 2 (PX-2026-0125): what a supine portable AP does to the read */
+const apLimits: AgentScript = {
+  id: "ap-limits",
+  match: /앙와위|\bAP\b|보정|한계|신뢰|이동식|supine|portable/i,
+  caseIds: ["PX-2026-0125"],
+  citations: 2,
+  verdict: () => ({ overall: "ACCEPT", agreement: 0.76 }),
+  steps: () => [
+    { name: "질문 이해", ms: 450 },
+    { name: "촬영 조건 판독", tool: "흉부 영상 분석", ms: 1000, detail: "이동식 · 앙와위 · AP 확인 · 심흉곽비 재측정" },
+    { name: "판독 기준 문헌 검색", tool: "문헌 검색", ms: 1100, detail: "이동식 AP 판독 보정 기준" },
+    { name: "근거 통합", ms: 600 },
+  ],
+  blocks: () => [
+    {
+      type: "p",
+      text: "이동식 앙와위 AP 촬영은 심장 음영이 확대되고 흉수가 뒤쪽으로 고여 직립 PA와 판독 기준이 다릅니다. 이 영상에서 그대로 신뢰할 수 있는 소견과 보정이 필요한 소견을 나눴습니다.",
+      cites: [paper(2), image],
+    },
+    {
+      type: "ddx",
+      buckets: [
+        {
+          title: "그대로 신뢰 가능",
+          tone: "ok",
+          items: [
+            { name: "양측 폐문부 중심 음영 · 폐부종 81%", reason: "촬영 자세와 무관한 실질 소견 — Grad-CAM 근거 영역이 폐 분할 마스크 안에서 양측 대칭 분포", cites: [image] },
+            { name: "기관지 주위 비후 · 간질성 선상 음영", reason: "폐부종의 간질기 소견 · 배율 영향 없음" },
+          ],
+        },
+        {
+          title: "보정 필요",
+          tone: "warning",
+          items: [
+            { name: "심비대 63% · 심흉곽비 0.58", reason: "AP 촬영은 심장 음영이 10-15% 확대 — PA 기준 약 0.52로 추정, 경계역", cites: [paper(2)] },
+            { name: "흉수 41%", reason: "앙와위에서는 뒤쪽에 층을 이뤄 늑골횡격막각 둔화가 약해짐 — 실제 양은 더 많을 수 있음" },
+            { name: "혈관 재분포", reason: "앙와위에서는 상엽 혈관 확장이 자세 때문에도 생겨 판단 보류" },
+          ],
+        },
+        {
+          title: "확인 방법",
+          tone: "info",
+          items: [
+            { name: "안정되면 직립 PA 재촬영", reason: "심흉곽비 · 흉수 재평가" },
+            { name: "흉부 초음파", reason: "흉수량과 B-line 으로 폐부종 정량" },
+          ],
+        },
+      ],
+    },
+    {
+      type: "checklist",
+      title: "판독문 기재 제안",
+      items: ["‘이동식 앙와위 AP 촬영으로 심장 음영 확대 가능’ 명시", "흉수는 ‘소량 이상 가능성’으로 기술", "직립 촬영 후 재평가 권고"],
+    },
+  ],
+  followups: () => ["이뇨제 반응 평가를 위한 재촬영 시점과 호전 기준은?", "이 검사의 근거 영역을 설명해 주세요"],
+};
+
+/* Scenario turn 3 (PX-2026-0125): treatment response and re-imaging plan */
+const edemaFollowup: AgentScript = {
+  id: "edema-followup",
+  match: /이뇨|재촬영|반응 평가|호전|추적|경과/,
+  caseIds: ["PX-2026-0125"],
+  citations: 3,
+  verdict: () => ({ overall: "ACCEPT", agreement: 0.81 }),
+  steps: () => [
+    { name: "질문 이해", ms: 450 },
+    { name: "진료 가이드라인 검색", tool: "문헌 검색", ms: 1300, detail: "ESC 급성 심부전 · 영상 추적 연구" },
+    { name: "임상 정보 분석", tool: "임상 정보 분석", ms: 800, detail: "활력징후 · 소변량 항목 대조" },
+    { name: "기준 영상 등록", tool: "흉부 영상 분석", ms: 900, detail: "근거 영역 2곳을 비교 지표로 저장" },
+    { name: "근거 통합", ms: 600 },
+  ],
+  blocks: () => [
+    {
+      type: "p",
+      text: "이뇨제 반응은 임상 지표가 먼저 좋아지고 영상은 12-24시간 늦게 따라옵니다. 따라서 첫 재촬영은 24시간 전후가 적절하고, 6-12시간 시점에는 산소포화도·호흡수·소변량으로 반응을 판단하는 것을 권고합니다.",
+      cites: [paper(1), paper(2)],
+    },
+    {
+      type: "ddx",
+      buckets: [
+        {
+          title: "재촬영 시점",
+          tone: "info",
+          items: [
+            { name: "24시간 전후 · 직립 PA 가능 시", reason: "영상 호전 지연을 고려한 1차 재평가 시점", cites: [paper(2)] },
+            { name: "6-12시간", reason: "임상 악화 시에만 조기 촬영 — 비침습 환기 · 삽관 결정용" },
+          ],
+        },
+        {
+          title: "호전 판단 기준 · 영상",
+          tone: "ok",
+          items: [
+            { name: "양측 폐문부 음영 감소", reason: "이번 검사 Grad-CAM 근거 영역 2곳과 같은 위치를 비교", cites: [image] },
+            { name: "혈관경 폭 감소 · 흉수 감소", reason: "직립 촬영에서 늑골횡격막각 회복 여부" },
+          ],
+        },
+        {
+          title: "재고려 기준",
+          tone: "warning",
+          items: [{ name: "24시간 내 호전 없음", reason: "비심인성 폐부종(ARDS) 재고려 — BNP · 심초음파 · 흉부 CT", cites: [paper(1)] }],
+        },
+      ],
+    },
+    {
+      type: "checklist",
+      title: "추적 계획",
+      items: ["이번 검사를 기준(baseline) 영상으로 등록", "6-12시간: 산소포화도 · 호흡수 · 소변량 재평가", "24시간: 직립 PA 재촬영 후 근거 영역 비교", "호전 없으면 BNP · 심초음파 · 흉부 CT"],
+    },
+  ],
+  followups: () => ["문헌 검색: 급성 심인성 폐부종 이뇨제 반응 평가와 재촬영 시점", "이 검사의 근거 영역을 설명해 주세요"],
 };
 
 const fallback: AgentScript = {
@@ -459,7 +593,8 @@ const fallback: AgentScript = {
 };
 
 /* Order matters: specific intents before broad ones */
-const SCRIPTS: AgentScript[] = [nodule, severity, compare, effusion, evidence, edema, next, ddx, fallback];
+/* Case-scoped scenario scripts first, then specific intents, then broad ones */
+const SCRIPTS: AgentScript[] = [edemaFollowup, apLimits, edema, nodule, severity, compare, effusion, evidence, next, ddx, fallback];
 
 export function pickScript(query: string, c: CaseData): AgentScript {
   const q = query.trim();

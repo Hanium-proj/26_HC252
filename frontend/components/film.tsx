@@ -59,6 +59,8 @@ export function Film({
   preset = "폐",
   zoom = false,
   heatSrc,
+  maskSrc,
+  priorLook = false,
 }: {
   variant?: Variant;
   view?: View;
@@ -79,8 +81,15 @@ export function Film({
   /* real model heatmap (already blended over the radiograph); drawn above
      the base image at the overlay opacity so the slider still works */
   heatSrc?: string;
+  /* lung segmentation mask (white lungs on black); multiplied over the
+     base image so only the lung fields remain */
+  maskSrc?: string;
+  /* same study rendered as an older exposure (prior-comparison slot) */
+  priorLook?: boolean;
 }) {
-  const zoomStyle = { transform: zoom ? "scale(1.18)" : "scale(1)", transformOrigin: "50% 45%" };
+  const scale = (zoom ? 1.18 : 1) * (priorLook ? 1.05 : 1);
+  const zoomStyle = { transform: `scale(${scale})`, transformOrigin: "50% 45%" };
+  const baseFilter = PRESETS[preset].filter + (priorLook ? " contrast(0.9) brightness(1.08)" : "");
   return (
     <figure className={`overflow-hidden rounded-lg bg-letterbox ${className}`}>
       <div className="relative w-full overflow-hidden bg-film" style={{ aspectRatio: ratio }}>
@@ -91,8 +100,18 @@ export function Film({
               src={src}
               alt={label ?? "chest radiograph"}
               className={`h-full w-full transition-[transform,filter] duration-300 ease-out ${fit === "contain" ? "object-contain" : "object-cover"}`}
-              style={{ filter: PRESETS[preset].filter, ...zoomStyle }}
+              style={{ filter: baseFilter, ...zoomStyle }}
             />
+            {maskSrc && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={maskSrc}
+                alt=""
+                aria-hidden="true"
+                className={`anim-rise absolute inset-0 h-full w-full mix-blend-multiply transition-transform duration-300 ease-out ${fit === "contain" ? "object-contain" : "object-cover"}`}
+                style={zoomStyle}
+              />
+            )}
             {heatSrc && (
               // eslint-disable-next-line @next/next/no-img-element
               <img

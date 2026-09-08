@@ -49,6 +49,14 @@ export default function AgentPage() {
 
   async function send(text: string) {
     if (streaming) return;
+    /* a follow-up prefixed "문헌 검색:" carries the question over to the
+       literature screen, which runs it through the retrieval pipeline */
+    const lit = /^문헌 검색\s*[:：]\s*(.+)$/.exec(text);
+    if (lit) {
+      actions.setLiterature(c.id, lit[1].trim());
+      router.push("/literature");
+      return;
+    }
     const time = now();
     const userMsg: ChatMsg = { role: "user", text, time };
     let agent: AgentMsg = { role: "agent", time, steps: [], blocks: [], streaming: true };

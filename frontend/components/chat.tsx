@@ -5,6 +5,7 @@ import type { AgentBlock, AgentStep, ChatMsg } from "@/lib/data";
 import { CiteChip, toneOf } from "@/components/ui";
 import {
   IconArrowRight,
+  IconBook,
   IconCheck,
   IconChevronDown,
   IconConsult,
@@ -67,17 +68,22 @@ export function Message({ m, onFollowup }: { m: ChatMsg; onFollowup?: (q: string
 
       {m.followups && !m.streaming && (
         <div className="anim-rise mt-4 flex flex-wrap gap-2">
-          {m.followups.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => onFollowup?.(f)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3.5 text-[12.5px] font-medium text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
-            >
-              <IconConsult className="h-3.5 w-3.5 text-ink-3" />
-              {f}
-            </button>
-          ))}
+          {m.followups.map((f) => {
+            const lit = f.startsWith("문헌 검색:");
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => onFollowup?.(f)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors"
+                style={lit ? { background: "var(--accent-wash)", color: "var(--accent-strong)" } : undefined}
+                {...(lit ? {} : { className: "inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3.5 text-[12.5px] font-medium text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink" })}
+              >
+                {lit ? <IconBook className="h-3.5 w-3.5" /> : <IconConsult className="h-3.5 w-3.5 text-ink-3" />}
+                {lit ? f.replace(/^문헌 검색\s*[:：]\s*/, "문헌에서 찾기 · ") : f}
+              </button>
+            );
+          })}
         </div>
       )}
 
