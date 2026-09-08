@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Panel, PanelHead, Chip, Tag, ProbBar, MicroLabel, Callout, ModelStamp, GhostButton } from "@/components/ui";
-import { Film, ViewerToolbar, PatientStrip, type Overlay } from "@/components/film";
+import { Film, ViewerToolbar, PatientStrip, type Overlay, type Preset } from "@/components/film";
 import { IconCrosshair, IconArrowRight } from "@/components/icons";
 import { localizationMetrics } from "@/lib/data";
 import { filmCorners, topFinding } from "@/lib/demo/cases";
@@ -13,6 +13,9 @@ export default function EvidencePage() {
   const { c, analyzed, upload } = useCurrentCase();
   const [overlay, setOverlay] = useState<Overlay>("히트맵");
   const [opacity, setOpacity] = useState(0.4);
+  const [preset, setPreset] = useState<Preset>("폐");
+  const [zoom, setZoom] = useState(false);
+  const viewer = { preset, zoom };
   const [targetEn, setTargetEn] = useState<string | null>(null);
 
   /* findings that actually produced a region on this study */
@@ -60,11 +63,20 @@ export default function EvidencePage() {
             </div>
           }
         />
-        <ViewerToolbar overlay={overlay} onOverlay={setOverlay} opacity={opacity} onOpacity={setOpacity} />
+        <ViewerToolbar
+          overlay={overlay}
+          onOverlay={setOverlay}
+          opacity={opacity}
+          onOpacity={setOpacity}
+          preset={preset}
+          onPreset={setPreset}
+          zoom={zoom}
+          onZoom={setZoom}
+        />
         <div className="grid grid-cols-2 gap-2 bg-letterbox p-2 xl:grid-cols-4">
-          <Film key={`o-${src}`} src={src} label="PA · OUTLINE" meta={`AI 감지 ${regions.length}건`} outline={outline} regions={regions} corner={corner} />
-          <Film key={`g-${src}`} src={src} label="GRAD-CAM" variant={heat ? "gradcam" : "plain"} outline={!heat && outline} regions={regions} overlayOpacity={overlayOpacity} swatch="jet" corners={false} />
-          <Film key={`e-${src}`} src={src} label="EIGEN-CAM" variant={heat ? "eigencam" : "plain"} outline={!heat && outline} regions={regions} overlayOpacity={overlayOpacity} swatch="teal" corners={false} />
+          <Film key={`o-${src}`} src={src} label="PA · OUTLINE" meta={`AI 감지 ${regions.length}건`} outline={outline} regions={regions} corner={corner} {...viewer} />
+          <Film key={`g-${src}`} src={src} label="GRAD-CAM" variant={heat ? "gradcam" : "plain"} outline={!heat && outline} regions={regions} overlayOpacity={overlayOpacity} swatch="jet" corners={false} {...viewer} />
+          <Film key={`e-${src}`} src={src} label="EIGEN-CAM" variant={heat ? "eigencam" : "plain"} outline={!heat && outline} regions={regions} overlayOpacity={overlayOpacity} swatch="teal" corners={false} {...viewer} />
           <Film src="/xray/ct-axial.png" label="CT AXIAL" meta="LUNG WINDOW · 대조" corners={false} fit="contain" />
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3">

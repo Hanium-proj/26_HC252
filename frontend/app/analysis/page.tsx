@@ -13,10 +13,10 @@ import {
   ModelStamp,
   Disclaimer,
 } from "@/components/ui";
-import { Film, ViewerToolbar, PatientStrip } from "@/components/film";
+import { Film, ViewerToolbar, PatientStrip, type Overlay, type Preset } from "@/components/film";
 import { Rich } from "@/components/rich";
 import { LocatorGlyph, IconArrowRight, IconPaperclip, IconChevronDown, IconCheck } from "@/components/icons";
-import { analysisSteps, filmCorners } from "@/lib/demo/cases";
+import { analysisSteps, filmCorners, topFinding } from "@/lib/demo/cases";
 import { useDemo, useCurrentCase } from "@/lib/demo/store";
 import { runAnalysis } from "@/lib/demo/api";
 import { Aborted } from "@/lib/demo/delay";
@@ -32,6 +32,10 @@ export default function AnalysisPage() {
   const [steps, setSteps] = useState<StepState[] | null>(null); // non-null while running
   const [revealKey, setRevealKey] = useState(0); // bump to replay result animations
   const [addingSymptom, setAddingSymptom] = useState(false);
+  const [overlay, setOverlay] = useState<Overlay>("끄기");
+  const [opacity, setOpacity] = useState(0.4);
+  const [preset, setPreset] = useState<Preset>("폐");
+  const [zoom, setZoom] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -89,6 +93,9 @@ export default function AnalysisPage() {
   const fileName = upload?.name ?? c.patient.file.name;
   const fileSize = upload?.size ?? c.patient.file.size;
   const stale = !analyzed && !running;
+  /* viewer overlay shows the top finding's regions once results exist */
+  const regions = analyzed ? c.regions[topFinding(c).en] ?? [] : [];
+  const viewer = { preset, zoom };
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
@@ -96,10 +103,32 @@ export default function AnalysisPage() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,400px)]">
         <Panel className="anim-rise flex flex-col overflow-hidden">
           <PatientStrip name={c.patient.name} meta={`${c.id} · ${c.patient.accession}`} right={<Tag>{c.patient.view} + 비교 1건</Tag>} />
-          <ViewerToolbar overlay="끄기" />
+          <ViewerToolbar
+            overlay={overlay}
+            onOverlay={setOverlay}
+            opacity={opacity}
+            onOpacity={setOpacity}
+            preset={preset}
+            onPreset={setPreset}
+            zoom={zoom}
+            onZoom={setZoom}
+          />
           <div className="grid flex-1 grid-cols-2 gap-2 bg-letterbox p-2">
-            <Film key={paSrc} src={paSrc} label="PA" meta={upload ? "업로드 · 방금" : "0.4s · 109 kVp"} ratio="4 / 5" corner={corner} />
-            <Film src="/xray/prior.jpeg" label="PRIOR PA" meta="2025-11 · 비교" corners={false} ratio="4 / 5" />
+            <Film
+              key={paSrc}
+              src={paSrc}
+              label="PA"
+              meta={upload ? "업로드 · 방금" : overlay !== "끄기" ? `AI 감지 ${regions.length}건` : "0.4s · 109 kVp"}
+              ratio="4 / 5"
+              corner={corner}
+              outline={overlay !== "끄기" && regions.length > 0}
+              variant={overlay === "히트맵" && regions.length > 0 ? "gradcam" : "plain"}
+              regions={regions}
+              overlayOpacity={Math.min(1, opacity * 2)}
+              swatch={overlay === "히트맵" && regions.length > 0 ? "jet" : undefined}
+              {...viewer}
+            />
+            <Film src="/xray/prior.jpeg" label="PRIOR PA" meta="2025-11 · 비교" corners={false} ratio="4 / 5" {...viewer} />
           </div>
         </Panel>
 

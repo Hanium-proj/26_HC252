@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type PointerEvent, type ReactNode } from "react";
+import { useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { IconZoomIn, IconContrast, IconRuler, IconCompare, IconExpand, IconChevronDown } from "@/components/icons";
 import type { Region } from "@/lib/demo/cases";
 
@@ -33,6 +33,14 @@ const DEFAULT_REGIONS: Region[] = [
 type Variant = "plain" | "gradcam" | "eigencam";
 type View = "pa" | "lateral";
 
+/* Window/level presets: CSS approximation of a DICOM W/L change */
+export type Preset = "폐" | "뼈" | "연부조직";
+const PRESETS: Record<Preset, { filter: string; wl: string }> = {
+  폐: { filter: "grayscale(1)", wl: "W 1500 · L -600" },
+  뼈: { filter: "grayscale(1) contrast(1.4) brightness(0.9)", wl: "W 2500 · L 480" },
+  연부조직: { filter: "grayscale(1) contrast(0.8) brightness(1.15)", wl: "W 400 · L 40" },
+};
+
 export function Film({
   variant = "plain",
   view = "pa",
@@ -48,6 +56,8 @@ export function Film({
   corner,
   regions,
   overlayOpacity,
+  preset = "폐",
+  zoom = false,
 }: {
   variant?: Variant;
   view?: View;
@@ -63,7 +73,10 @@ export function Film({
   corner?: CornerInfo;
   regions?: Region[];
   overlayOpacity?: number;
+  preset?: Preset;
+  zoom?: boolean;
 }) {
+  const zoomStyle = { transform: zoom ? "scale(1.18)" : "scale(1)", transformOrigin: "50% 45%" };
   return (
     <figure className={`overflow-hidden rounded-lg bg-letterbox ${className}`}>
       <div className="relative w-full overflow-hidden bg-film" style={{ aspectRatio: ratio }}>
@@ -73,17 +86,18 @@ export function Film({
             <img
               src={src}
               alt={label ?? "chest radiograph"}
-              className={`h-full w-full grayscale ${fit === "contain" ? "object-contain" : "object-cover"}`}
+              className={`h-full w-full transition-[transform,filter] duration-300 ease-out ${fit === "contain" ? "object-contain" : "object-cover"}`}
+              style={{ filter: PRESETS[preset].filter, ...zoomStyle }}
             />
             {(variant !== "plain" || outline) && (
-              <HeatOverlay variant={variant} outline={outline} regions={regions} opacity={overlayOpacity} />
+              <HeatOverlay variant={variant} outline={outline} regions={regions} opacity={overlayOpacity} style={zoomStyle} />
             )}
           </>
         ) : (
           <ChestArt variant={variant} view={view} outline={outline} />
         )}
 
-        {corners && <DicomCorners view={view} info={corner ?? DEFAULT_CORNER} />}
+        {corners && <DicomCorners view={view} info={corner ?? DEFAULT_CORNER} wl={PRESETS[preset].wl} zoom={zoom ? 168 : 142} />}
       </div>
 
       {(label || meta || swatch) && (
@@ -116,7 +130,7 @@ function HeatSwatch({ kind }: { kind: "jet" | "teal" }) {
 
 const cornerText = "mono text-[10px] leading-[15px] tracking-wide text-[#b8c0c8]/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]";
 
-function DicomCorners({ view, info }: { view: View; info: CornerInfo }) {
+function DicomCorners({ view, info, wl, zoom }: { view: View; info: CornerInfo; wl: string; zoom: number }) {
   return (
     <>
       <div className={`absolute left-2.5 top-2 ${cornerText}`}>
@@ -130,9 +144,9 @@ function DicomCorners({ view, info }: { view: View; info: CornerInfo }) {
         {info.date}
       </div>
       <div className={`absolute bottom-2 left-2.5 ${cornerText}`}>
-        W 1500 · L -600
+        {wl}
         <br />
-        ZOOM 142%
+        ZOOM {zoom}%
       </div>
       <div className={`absolute bottom-2 right-2.5 text-right ${cornerText}`}>
         {view === "pa" ? "PA ERECT" : "LAT"} · 1/2
@@ -157,17 +171,20 @@ function HeatOverlay({
   outline,
   regions = DEFAULT_REGIONS,
   opacity = 0.8,
+  style,
 }: {
   variant: Variant;
   outline: boolean;
   regions?: Region[];
   opacity?: number;
+  style?: React.CSSProperties;
 }) {
   return (
     <svg
       viewBox="0 0 400 500"
       preserveAspectRatio="xMidYMid slice"
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="pointer-events-none absolute inset-0 h-full w-full transition-transform duration-300 ease-out"
+      style={style}
     >
       <defs>
         <radialGradient id="o-hot" cx="50%" cy="50%" r="50%">
@@ -412,10 +429,23 @@ function LateralArt() {
 
 /* ---------- viewer chrome ---------- */
 
-function ToolButton({ children, active }: { children: ReactNode; active?: boolean }) {
+function ToolButton({
+  children,
+  active,
+  onClick,
+  label,
+}: {
+  children: ReactNode;
+  active?: boolean;
+  onClick?: () => void;
+  label: string;
+}) {
   return (
     <button
       type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
       className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors duration-150 ease-out ${
         active ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"
       }`}
@@ -437,15 +467,26 @@ export function ViewerToolbar({
   onOverlay,
   opacity = 0.4,
   onOpacity,
+  preset = "폐",
+  onPreset,
+  zoom = false,
+  onZoom,
 }: {
   overlay?: Overlay;
   onOverlay?: (o: Overlay) => void;
   opacity?: number;
   onOpacity?: (v: number) => void;
+  preset?: Preset;
+  onPreset?: (p: Preset) => void;
+  zoom?: boolean;
+  onZoom?: (z: boolean) => void;
 }) {
   const segs: Overlay[] = ["끄기", "외곽선", "히트맵"];
   const track = useRef<HTMLDivElement>(null);
   const pct = Math.round(opacity * 100);
+  const [menu, setMenu] = useState(false);
+  const [tools, setTools] = useState({ ruler: false, compare: false, expand: false });
+  const toggle = (k: keyof typeof tools) => setTools((t) => ({ ...t, [k]: !t[k] }));
 
   function setFromPointer(e: PointerEvent<HTMLDivElement>) {
     const el = track.current;
@@ -457,18 +498,41 @@ export function ViewerToolbar({
   return (
     <div className="flex h-12 items-center justify-between gap-3 px-3">
       <div className="flex items-center gap-1">
-        <ToolButton><IconZoomIn className="h-[18px] w-[18px]" /></ToolButton>
-        <ToolButton><IconRuler className="h-[18px] w-[18px]" /></ToolButton>
-        <ToolButton><IconCompare className="h-[18px] w-[18px]" /></ToolButton>
-        <ToolButton><IconExpand className="h-[18px] w-[18px]" /></ToolButton>
-        <button
-          type="button"
-          className="ml-1 flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] font-medium text-ink-2 transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-ink"
-        >
-          <IconContrast className="h-[16px] w-[16px]" />
-          <span className="hidden xl:inline">폐 프리셋</span>
-          <IconChevronDown className="h-[14px] w-[14px] text-ink-3" />
-        </button>
+        <ToolButton label="확대" active={zoom} onClick={() => onZoom?.(!zoom)}><IconZoomIn className="h-[18px] w-[18px]" /></ToolButton>
+        <ToolButton label="계측" active={tools.ruler} onClick={() => toggle("ruler")}><IconRuler className="h-[18px] w-[18px]" /></ToolButton>
+        <ToolButton label="비교" active={tools.compare} onClick={() => toggle("compare")}><IconCompare className="h-[18px] w-[18px]" /></ToolButton>
+        <ToolButton label="전체 화면" active={tools.expand} onClick={() => toggle("expand")}><IconExpand className="h-[18px] w-[18px]" /></ToolButton>
+        <div className="relative ml-1">
+          <button
+            type="button"
+            onClick={() => setMenu((v) => !v)}
+            aria-expanded={menu}
+            className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] font-medium transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-ink ${menu ? "bg-surface-2 text-ink" : "text-ink-2"}`}
+          >
+            <IconContrast className="h-[16px] w-[16px]" />
+            <span className="hidden xl:inline">{preset} 프리셋</span>
+            <IconChevronDown className={`h-[14px] w-[14px] text-ink-3 transition-transform duration-150 ${menu ? "rotate-180" : ""}`} />
+          </button>
+          {menu && (
+            <div className="anim-rise absolute left-0 top-9 z-30 w-44 rounded-lg bg-surface-1 p-1 shadow-e3">
+              {(Object.keys(PRESETS) as Preset[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => {
+                    onPreset?.(k);
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-surface-2"
+                  style={k === preset ? { background: "var(--accent-wash)", color: "var(--accent-strong)" } : { color: "var(--ink)" }}
+                >
+                  {k}
+                  <span className="mono text-[10.5px] text-ink-3">{PRESETS[k].wl}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
