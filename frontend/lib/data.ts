@@ -8,7 +8,6 @@
  */
 
 import { CASES, DEFAULT_CASE_ID } from "@/lib/demo/cases";
-import { defaultLiterature } from "@/lib/demo/literature-script";
 
 export type Level = "critical" | "warning" | "ok" | "info" | "neutral";
 
@@ -47,10 +46,10 @@ export type SourceGrade = "가이드라인" | "논문" | "유사 사례";
 
 /* Retrieval pipeline, doctor-friendly naming */
 export const retrievalStages = [
-  { n: "01", name: "질문 해석", desc: "진단 맥락에서 검색 질문 생성", result: "질문 3건" },
-  { n: "02", name: "의미 + 키워드 결합 검색", desc: "문헌 12,480건 색인에서 후보 확보", result: "후보 50건" },
-  { n: "03", name: "정밀 재정렬", desc: "질문과의 근거 적합도 순 재배열", result: "상위 5건" },
-  { n: "04", name: "근거 충분성 점검", desc: "부족 시 웹 검색으로 보강", result: "통과" },
+  { n: "01", name: "질문 해석", desc: "진단 맥락에서 검색 질문 생성" },
+  { n: "02", name: "의미 + 키워드 결합 검색", desc: "문헌 12,480건 색인에서 후보 확보" },
+  { n: "03", name: "정밀 재정렬", desc: "질문과의 근거 적합도 순 재배열" },
+  { n: "04", name: "근거 충분성 점검", desc: "부족 시 웹 검색으로 보강" },
 ];
 
 /* Worklist (dashboard) */
@@ -124,8 +123,6 @@ export const findings = hero.findings;
 export const abnormalityScore = hero.abnormalityScore;
 export const sentenceImportance = hero.sentenceImportance;
 export const tokenImportance = hero.tokenImportance;
-export const sources = defaultLiterature.sources;
-export const reliabilityChecks = defaultLiterature.reliability;
 
 export const worklist: WorkItem[] = [
   { id: "PX-2026-0142", patient: "여성 · 58세", study: "PA+LAT", finding: "폐렴 의심", score: 87, level: "critical", status: "우선 확인", time: "09:41", selected: true },
