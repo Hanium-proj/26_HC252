@@ -346,8 +346,13 @@ const INTENTS: { match: RegExp; result: LiteratureResult }[] = [
   { match: /폐렴|음영|발열|pneumonia|기침/i, result: pneumonia },
 ];
 
+/* null when the query has no recognizable intent (caller falls back to the case query) */
+export function matchLiterature(query: string): LiteratureResult | null {
+  return INTENTS.find((i) => i.match.test(query))?.result ?? null;
+}
+
 export function pickLiterature(query: string): LiteratureResult {
-  return INTENTS.find((i) => i.match.test(query))?.result ?? general;
+  return matchLiterature(query) ?? general;
 }
 
 export const defaultLiterature = pneumonia;

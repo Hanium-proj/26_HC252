@@ -36,16 +36,11 @@ export const localizationMetrics = [
 ];
 
 /* Tool catalogue for the agent right rail (counts come from the demo store) */
-export const agentTools: {
-  name: "흉부 영상 분석" | "문헌 검색" | "임상 정보 분석" | "웹 검색";
-  desc: string;
-  calls: number;
-  state: "완료" | "대기";
-}[] = [
-  { name: "흉부 영상 분석", desc: "근거 영역 감지 · 히트맵", calls: 2, state: "완료" },
-  { name: "문헌 검색", desc: "가이드라인 · 논문 · 사례", calls: 3, state: "완료" },
-  { name: "임상 정보 분석", desc: "증상 · 활력징후 기여도", calls: 1, state: "완료" },
-  { name: "웹 검색", desc: "최신 자료 보강", calls: 0, state: "대기" },
+export const agentTools: { name: "흉부 영상 분석" | "문헌 검색" | "임상 정보 분석" | "웹 검색"; desc: string }[] = [
+  { name: "흉부 영상 분석", desc: "근거 영역 감지 · 히트맵" },
+  { name: "문헌 검색", desc: "가이드라인 · 논문 · 사례" },
+  { name: "임상 정보 분석", desc: "증상 · 활력징후 기여도" },
+  { name: "웹 검색", desc: "최신 자료 보강" },
 ];
 
 export type SourceGrade = "가이드라인" | "논문" | "유사 사례";
@@ -139,86 +134,4 @@ export const worklist: WorkItem[] = [
   { id: "PX-2026-0131", patient: "남성 · 63세", study: "PA+LAT", finding: "심비대 의심", score: 58, level: "warning", status: "검토 필요", time: "08:33" },
   { id: "PX-2026-0128", patient: "여성 · 67세", study: "PA", finding: "흉수 의심", score: 71, level: "warning", status: "검토 필요", time: "08:10" },
   { id: "PX-2026-0125", patient: "남성 · 52세", study: "PA", finding: "분석 중", score: -1, level: "info", status: "분석 중", time: "08:02" },
-];
-
-export const chat: ChatMsg[] = [
-  {
-    role: "user",
-    time: "09:44",
-    text: "우하엽 음영, 폐렴으로 봐도 될까요? 다른 가능성도 함께 정리해 주세요.",
-  },
-  {
-    role: "agent",
-    time: "09:44",
-    receipt: "5단계 실행 · 문헌 3편 인용 · 12초",
-    blocks: [
-      {
-        type: "p",
-        text: "우하엽 폐포성 음영과 마른기침·미열(37.8도) 경과를 종합하면 지역사회획득 폐렴 가능성이 가장 높습니다. 근거 영역이 실제 음영 위치와 일치하며, 아래 순서로 감별을 제안합니다.",
-        cites: [
-          { n: 1, kind: "paper", label: "가이드라인" },
-          { kind: "image", label: "영상" },
-        ],
-      },
-      {
-        type: "ddx",
-        buckets: [
-          {
-            title: "가장 유력",
-            tone: "critical",
-            items: [
-              {
-                name: "폐렴 47%",
-                reason: "우하엽 음영 + 발열·기침, 근거 위치 일치도 높음",
-                cites: [{ n: 1, kind: "paper", label: "1" }, { kind: "image", label: "영상" }],
-              },
-            ],
-          },
-          {
-            title: "확장 감별",
-            tone: "warning",
-            items: [
-              {
-                name: "무기폐 37%",
-                reason: "좌하엽 경계 선상 이동 여부 확인 필요 — 부피 감소 동반 시 무기폐 우선",
-                cites: [{ n: 3, kind: "paper", label: "3" }],
-              },
-            ],
-          },
-          {
-            title: "놓치면 안 됨",
-            tone: "info",
-            items: [
-              {
-                name: "흉수 동반",
-                reason: "늑골횡격막각 무딤이 경미하게 관찰 — 측와위 촬영으로 배제 권장",
-                cites: [{ n: 2, kind: "paper", label: "2" }],
-              },
-            ],
-          },
-        ],
-      },
-      {
-        type: "checklist",
-        title: "추가 확인 제안",
-        items: ["혈액검사 · 염증 수치(CRP) 확인", "공기기관지음영 유무 재검토", "과거 영상과 비교 판독"],
-      },
-    ],
-    followups: ["외래 치료 가능한 중증도인가요?", "과거 영상과 비교해 주세요"],
-  },
-  {
-    role: "user",
-    time: "09:47",
-    text: "폐렴이면 외래 치료 가능한 중증도인지 판단 기준을 알려주세요.",
-  },
-  {
-    role: "agent",
-    time: "09:47",
-    streaming: true,
-    steps: [
-      { name: "질문 이해 완료", state: "done" },
-      { name: "진료 가이드라인 검색 중", state: "active" },
-    ],
-    blocks: [],
-  },
 ];

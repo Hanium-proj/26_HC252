@@ -11,13 +11,14 @@ import type { AgentBlock } from "@/lib/data";
 import { sleep, jitter, tokenize } from "./delay";
 import { getCase, analysisSteps } from "./cases";
 import { pickScript, type ToolName, type Verdict } from "./agent-script";
-import { pickLiterature, type LiteratureResult } from "./literature-script";
+import { matchLiterature, pickLiterature, type LiteratureResult, type Source } from "./literature-script";
 
 /* ---------- /agent/stream ---------- */
 
 export type AgentEvent =
   | { event: "plan"; steps: { name: string; tool?: ToolName }[] }
   | { event: "tool"; index: number; name: string; tool?: ToolName; status: "start" | "done"; detail?: string }
+  | { event: "evidence"; query: string; sources: Source[] }
   | { event: "verdict"; verdict: Verdict }
   | { event: "block"; block: AgentBlock }
   | { event: "token"; text: string }
@@ -41,6 +42,11 @@ export async function* streamAgent(
     await sleep(jitter(s.ms), signal);
     yield { event: "tool", index: i, name: s.name, tool: s.tool, status: "done", detail: s.detail };
   }
+
+  /* literature set the answer cites: the question's own intent when it has
+     one, otherwise the case-level query the RAG screen already shows */
+  const litQuery = matchLiterature(query) ? query : c.literatureQuery;
+  yield { event: "evidence", query: litQuery, sources: pickLiterature(litQuery).sources };
 
   yield { event: "verdict", verdict: script.verdict(c) };
   await sleep(300, signal);
