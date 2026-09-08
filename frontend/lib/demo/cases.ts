@@ -68,7 +68,7 @@ export type CaseData = {
   starters?: string[];
   /* prior study for the comparison slot. undefined = same film rendered as
      an older exposure; null = no prior on record (first visit) */
-  prior?: { src: string; date: string } | null;
+  prior?: { src?: string; date: string } | null;
 };
 
 export const DEFAULT_CASE_ID = "PX-2026-0142";
@@ -96,78 +96,90 @@ const c0142: CaseData = {
   id: "PX-2026-0142",
   patient: {
     id: "PX-2026-0142",
-    masked: "KIM, S** · F/58",
-    name: "김성** · 여성 · 58세",
-    study: "CHEST PA · 2026-07-13 09:41",
-    studyKo: "흉부 X-ray 정면·측면",
+    masked: "KIM, S** · M/62",
+    name: "김성** · 남성 · 62세",
+    study: "CHEST AP · 2026-07-13 09:41",
+    studyKo: "흉부 X-ray 이동식 AP",
     accession: "ACC 20260713-0042",
-    view: "PA + LAT",
-    ageSex: "58세 · 여성",
-    spo2: 95,
-    temp: 37.8,
-    hr: 96,
-    rr: 20,
-    bp: "138/84",
-    smoking: "비흡연",
-    symptoms: ["마른기침", "미열", "흉부 불편감", "3일 지속"],
-    note: "3일 전부터 마른기침과 미열 지속. 고혈압 과거력. 흉부 불편감 호소.",
-    file: { name: "chest_pa_0142.dcm", size: "1.7 MB" },
+    view: "AP",
+    ageSex: "62세 · 남성",
+    spo2: 89,
+    temp: 37.1,
+    hr: 118,
+    rr: 26,
+    bp: "96/58",
+    smoking: "흡연 30갑년",
+    symptoms: ["산소포화도 급락", "우측 호흡음 감소", "기계환기 3일째", "중환자실"],
+    note: "COPD 급성 악화로 중환자실 기계환기 3일째. 오늘 09시 갑작스러운 산소포화도 저하와 우측 호흡음 감소. 이동식 앙와위 촬영.",
+    file: { name: "chest_ap_0142.dcm", size: "2.0 MB" },
   },
-  row: { patient: "여성 · 58세", study: "PA+LAT", finding: "폐렴 의심", score: 87, level: "critical", status: "우선 확인", time: "09:41" },
-  chip: "폐렴 의심 47%",
+  row: { patient: "남성 · 62세", study: "AP", finding: "기흉 의심", score: 86, level: "critical", status: "우선 확인", time: "09:41" },
+  chip: "기흉 의심 80%",
   findings: [
-    { ko: "폐렴 의심", en: "PNEUMONIA", prob: 0.47, threshold: 0.32, level: "critical", loc: { x: 0.3, y: 0.74 }, note: "우하엽 음영 집중" },
-    { ko: "폐 음영 의심", en: "LUNG OPACITY", prob: 0.43, threshold: 0.35, level: "warning", loc: { x: 0.42, y: 0.66 }, note: "양측 하부 분포" },
-    { ko: "무기폐 의심", en: "ATELECTASIS", prob: 0.37, threshold: 0.34, level: "warning", loc: { x: 0.68, y: 0.7 }, note: "좌하엽 경계" },
-    { ko: "심비대 의심", en: "CARDIOMEGALY", prob: 0.34, threshold: 0.4, level: "neutral", loc: { x: 0.55, y: 0.62 }, note: "심흉곽비 경계역" },
-    { ko: "폐 병변", en: "LUNG LESION", prob: 0.29, threshold: 0.38, level: "neutral", loc: { x: 0.33, y: 0.4 }, note: "국소 소견 낮음" },
-    { ko: "흉수", en: "PLEURAL EFFUSION", prob: 0.27, threshold: 0.36, level: "neutral", loc: { x: 0.26, y: 0.85 }, note: "늑골횡격막각 무딤 경미" },
-    { ko: "기흉", en: "PNEUMOTHORAX", prob: 0.08, threshold: 0.3, level: "neutral", loc: { x: 0.72, y: 0.3 }, note: "근거 미약" },
-    { ko: "유의 소견 미검출", en: "NO FINDING", prob: 0.12, threshold: 0.5, level: "neutral", note: "판독의 확인 필요" },
+    { ko: "기흉 의심", en: "PNEUMOTHORAX", prob: 0.8, threshold: 0.3, level: "critical", loc: { x: 0.24, y: 0.3 }, note: "우측 첨부 흉막선 · 심부 고랑 징후" },
+    { ko: "폐 음영 의심", en: "LUNG OPACITY", prob: 0.44, threshold: 0.35, level: "warning", loc: { x: 0.3, y: 0.7 }, note: "우하부 허탈 관련 음영" },
+    { ko: "무기폐 의심", en: "ATELECTASIS", prob: 0.39, threshold: 0.34, level: "warning", loc: { x: 0.3, y: 0.62 }, note: "우측 부분 허탈" },
+    { ko: "흉수", en: "PLEURAL EFFUSION", prob: 0.31, threshold: 0.36, level: "neutral", loc: { x: 0.26, y: 0.85 }, note: "우측 늑골횡격막각 경미" },
+    { ko: "심비대", en: "CARDIOMEGALY", prob: 0.28, threshold: 0.4, level: "neutral", loc: { x: 0.55, y: 0.62 }, note: "AP 확대 감안 시 정상 범위" },
+    { ko: "폐렴", en: "PNEUMONIA", prob: 0.24, threshold: 0.32, level: "neutral", loc: { x: 0.3, y: 0.74 }, note: "발열 없음" },
+    { ko: "폐 병변", en: "LUNG LESION", prob: 0.11, threshold: 0.38, level: "neutral", loc: { x: 0.33, y: 0.4 }, note: "근거 미약" },
+    { ko: "유의 소견 미검출", en: "NO FINDING", prob: 0.06, threshold: 0.5, level: "neutral", note: "판독의 확인 필요" },
   ],
-  abnormalityScore: 87,
+  abnormalityScore: 86,
   summary: {
     lead:
-      "58세 여성의 흉부 X-ray와 임상 정보를 종합한 결과 **폐렴 의심(47%)**이 최상위 소견입니다. 우하엽 음영 분포와 마른기침·미열 경과가 판단에 주로 기여했으며, **폐 음영(43%) · 무기폐(37%)**가 감별 대상으로 남습니다.",
+      "62세 남성의 이동식 흉부 X-ray와 임상 정보를 종합한 결과 **기흉 의심(80%)**이 최상위 소견입니다. 우측 첨부 흉막선과 심부 고랑 징후, 기계환기 중 갑작스러운 산소포화도 저하 경과가 판단에 주로 기여했으며, **폐 음영(44%) · 무기폐(39%)**가 동반 소견으로 남습니다.",
     rows: [
-      { k: "폐렴 의심", note: "영상·임상 근거 일치", tone: "critical" },
-      { k: "폐 음영 의심", note: "폐렴과 중첩 가능", tone: "warning" },
-      { k: "무기폐 의심", note: "부피 감소 확인 필요", tone: "warning" },
+      { k: "기흉 의심", note: "영상·임상 근거 일치", tone: "critical" },
+      { k: "폐 음영 의심", note: "우하부 허탈 관련", tone: "warning" },
+      { k: "무기폐 의심", note: "우측 부분 허탈", tone: "warning" },
     ],
-    callout: "판독자 간 일치도가 낮은 소견이 포함되어 있습니다. 혈액검사·염증 수치와 임상 경과를 함께 확인하세요.",
-    calloutLevel: "warning",
+    callout: "기계환기 중 기흉은 긴장성으로 진행할 수 있습니다. 종격동 편위 여부를 즉시 확인하고 임상팀에 알리세요.",
+    calloutLevel: "critical",
   },
   agentSummary:
-    "우하엽 폐포성 음영과 마른기침·미열 경과를 종합하면 **지역사회획득 폐렴** 가능성이 가장 높습니다[1][영상]. 판독자 간 일치도가 낮은 소견이 포함되어 **판독의 확인**을 권고합니다.",
+    "우측 첨부 흉막선과 심부 고랑 징후, 기계환기 중 갑작스러운 산소포화도 저하·우측 호흡음 감소를 종합하면 **기흉** 가능성이 가장 높습니다[1][영상]. 긴장성 진행 위험이 있어 **즉시 판독**을 권고합니다.",
   sentenceImportance: [
-    { text: "3일 전부터 마른기침과 미열 지속", weight: 0.79 },
-    { text: "흉부 불편감 호소", weight: 0.52 },
-    { text: "산소포화도 95% · 체온 37.8도", weight: 0.46 },
-    { text: "고혈압 과거력", weight: 0.24 },
+    { text: "갑작스러운 산소포화도 저하와 우측 호흡음 감소", weight: 0.91 },
+    { text: "중환자실 기계환기 3일째", weight: 0.7 },
+    { text: "COPD 급성 악화", weight: 0.55 },
+    { text: "이동식 앙와위 촬영", weight: 0.2 },
   ],
   tokenImportance: [
-    { token: "마른기침", weight: 0.82 },
-    { token: "미열", weight: 0.71 },
-    { token: "3일 지속", weight: 0.63 },
-    { token: "산소포화도 95%", weight: 0.58 },
-    { token: "흉부 불편감", weight: 0.44 },
-    { token: "고혈압 과거력", weight: 0.29 },
+    { token: "호흡음 감소", weight: 0.9 },
+    { token: "산소포화도 저하", weight: 0.86 },
+    { token: "기계환기", weight: 0.72 },
+    { token: "COPD", weight: 0.56 },
+    { token: "혈압 96/58", weight: 0.48 },
+    { token: "앙와위", weight: 0.2 },
   ],
+  /* hotspots measured from the model's masked Grad-CAM (film space) */
   regions: {
-    PNEUMONIA: [
-      { cx: 128, cy: 330, rx: 66, ry: 56, w: 0.94 },
-      { cx: 252, cy: 302, rx: 40, ry: 34, w: 0.62 },
+    PNEUMOTHORAX: [
+      { cx: 160, cy: 84, rx: 42, ry: 30, w: 0.92 },
+      { cx: 108, cy: 272, rx: 58, ry: 42, w: 0.96 },
     ],
-    "LUNG OPACITY": [
-      { cx: 140, cy: 312, rx: 60, ry: 50, w: 0.9 },
-      { cx: 262, cy: 322, rx: 52, ry: 44, w: 0.7 },
-    ],
-    ATELECTASIS: [{ cx: 268, cy: 342, rx: 48, ry: 40, w: 0.86 }],
-    CARDIOMEGALY: [{ cx: 210, cy: 320, rx: 70, ry: 60, w: 0.66 }],
-    "LUNG LESION": [{ cx: 132, cy: 200, rx: 30, ry: 28, w: 0.58 }],
-    "PLEURAL EFFUSION": [{ cx: 110, cy: 412, rx: 56, ry: 30, w: 0.55 }],
+    "LUNG OPACITY": [{ cx: 116, cy: 280, rx: 54, ry: 40, w: 0.7 }],
+    ATELECTASIS: [{ cx: 120, cy: 262, rx: 50, ry: 46, w: 0.66 }],
+    "PLEURAL EFFUSION": [{ cx: 110, cy: 318, rx: 52, ry: 24, w: 0.5 }],
   },
-  literatureQuery: "우하엽 음영 · 발열 동반 성인, 지역사회획득 폐렴 감별과 관리 근거",
+  literatureQuery: "기계환기 중 갑작스러운 산소포화도 저하 · 앙와위 촬영 기흉 소견(심부 고랑 징후)과 처치 근거",
+  /* real pipeline output (ViT classifier + lung segmentation + Grad-CAM / Eigen-CAM) */
+  images: {
+    pa: "/xray/model/0142/original.png",
+    gradcam: "/xray/model/0142/gradcam-masked.png",
+    eigencam: "/xray/model/0142/eigencam-masked.png",
+    mask: "/xray/model/0142/lung-mask.png",
+    view: "ap",
+  },
+  /* daily portable film from yesterday, same study rendered as an older exposure */
+  prior: { date: "2026-07-12" },
+  starters: [
+    "기흉으로 봐도 될까요? 감별 포인트는?",
+    "긴장성 기흉으로 진행할 위험은?",
+    "흉관 삽입 적응증을 알려주세요",
+    "이 검사의 근거 영역을 설명해 주세요",
+  ],
 };
 
 const c0139: CaseData = {
@@ -511,10 +523,10 @@ const c0125: CaseData = {
   literatureQuery: "양측 폐문부 음영 · 급성 호흡곤란 성인, 심인성 폐부종 감별과 관리 근거",
   /* real pipeline output (ViT classifier + lung segmentation + Grad-CAM / Eigen-CAM) */
   images: {
-    pa: "/xray/model/original.png",
-    gradcam: "/xray/model/gradcam-masked.png",
-    eigencam: "/xray/model/eigencam-masked.png",
-    mask: "/xray/model/lung-mask.png",
+    pa: "/xray/model/0125/original.png",
+    gradcam: "/xray/model/0125/gradcam-masked.png",
+    eigencam: "/xray/model/0125/eigencam-masked.png",
+    mask: "/xray/model/0125/lung-mask.png",
     view: "ap",
   },
   prior: null,
@@ -542,8 +554,8 @@ export function getCase(id: string | null | undefined): CaseData {
 /* Prior-comparison slot: explicit prior, or the same film as an older exposure */
 export function priorOf(c: CaseData): { src: string; date: string; sameStudy: boolean } | null {
   if (c.prior === null) return null;
-  if (c.prior) return { ...c.prior, sameStudy: false };
-  return { src: c.images?.pa ?? "/xray/pa.png", date: "2025-11", sameStudy: true };
+  const src = c.prior?.src ?? c.images?.pa ?? "/xray/pa.png";
+  return { src, date: c.prior?.date ?? "2025-11", sameStudy: !c.prior?.src };
 }
 
 /* Base film + projection for the viewer (upload wins over model output) */

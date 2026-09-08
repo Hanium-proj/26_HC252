@@ -145,6 +145,46 @@ const effusion: LiteratureResult = {
   synthesis: { text: "3개 출처가 **심인성 흉수 우선 감별**을 일관되게 지지합니다. 근거 충분성 점검을 통과했습니다.", avg: 0.87, adopted: 3, level: "ok" },
 };
 
+const pneumothorax: LiteratureResult = {
+  key: "pneumothorax",
+  sources: [
+    {
+      n: 1,
+      title: "BTS guideline for pleural disease 2023: spontaneous and iatrogenic pneumothorax",
+      source: "PubMed · PMID 37433578",
+      grade: "가이드라인",
+      year: 2023,
+      relevance: 0.95,
+      snippet: "기계환기 중 발생한 기흉은 긴장성 진행 위험이 높아 크기와 무관하게 흉관 삽입을 권고하며, 긴장성 징후가 있으면 영상 확인 전 감압한다.",
+    },
+    {
+      n: 2,
+      title: "Supine chest radiograph signs of pneumothorax: deep sulcus sign and basilar hyperlucency",
+      source: "PMC · PMCID 7891234",
+      grade: "논문",
+      year: 2021,
+      relevance: 0.89,
+      snippet: "앙와위에서는 공기가 전하방에 모여 첨부 흉막선 대신 심부 고랑 징후와 기저부 과투과가 주요 소견이다. 의심 시 폐 초음파나 CT로 확인한다.",
+    },
+    {
+      n: 3,
+      title: "중환자실 기계환기 환자 기흉 — 심부 고랑 징후로 조기 발견한 사례",
+      source: "원내 유사 사례 · C-4522",
+      grade: "유사 사례",
+      year: 2025,
+      relevance: 0.83,
+      snippet: "이동식 앙와위 촬영에서 우측 심부 고랑 징후로 기흉을 조기 발견해 흉관 삽입 후 1시간 추적 촬영에서 재팽창을 확인한 사례.",
+    },
+  ],
+  stageResults: ["질문 3건", "후보 45건", "상위 5건", "통과"],
+  reliability: [
+    { ko: "검색 관련성", en: "RELEVANCE", v: 0.93 },
+    { ko: "추론 일관성", en: "CONSISTENCY", v: 0.88 },
+    { ko: "출처 없는 서술 차단", en: "GROUNDEDNESS", v: 0.95 },
+  ],
+  synthesis: { text: "3개 출처가 **긴장성 진행 위험 평가와 흉관 삽입 판단** 경로를 일관되게 지지합니다. 근거 충분성 점검을 통과했습니다.", avg: 0.89, adopted: 3, level: "ok" },
+};
+
 const edema: LiteratureResult = {
   key: "edema",
   sources: [
@@ -432,6 +472,7 @@ const general: LiteratureResult = {
 
 const INTENTS: { match: RegExp; result: LiteratureResult }[] = [
   { match: /결절|nodule|mm/i, result: nodule },
+  { match: /기흉|pneumothorax|흉막선|심부 고랑|흉관/i, result: pneumothorax },
   { match: /이뇨|재촬영|반응 평가|호전|decongestion/i, result: edemaFollowup },
   { match: /외래|중증도|입원|CURB|PSI/i, result: severity },
   { match: /폐부종|부종|edema|폐울혈/i, result: edema },

@@ -8,7 +8,7 @@ import type { Region } from "@/lib/demo/cases";
 export type CornerInfo = { name: string; sexAge: string; id: string; date: string; acc: string };
 const DEFAULT_CORNER: CornerInfo = {
   name: "KIM, S**",
-  sexAge: "F/58",
+  sexAge: "M/62",
   id: "PX-2026-0142",
   date: "2026-07-13 09:41",
   acc: "ACC 20260713-0042",
