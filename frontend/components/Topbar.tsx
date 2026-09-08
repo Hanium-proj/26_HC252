@@ -34,7 +34,7 @@ export function Topbar() {
   }, []);
 
   return (
-    <header className="topbar-veil sticky top-0 z-10 flex h-[56px] items-center justify-between gap-6 px-7">
+    <header className="topbar-veil sticky top-0 z-30 flex h-[56px] items-center justify-between gap-6 px-7">
       <div className="flex min-w-0 items-center gap-2 text-[13px]">
         <span className="shrink-0 text-ink-3">Chest AI</span>
         <span className="shrink-0 text-ink-3">/</span>

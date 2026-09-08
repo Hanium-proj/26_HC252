@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useDemo } from "@/lib/demo/store";
 import {
   IconGrid,
   IconClassify,
@@ -36,6 +37,16 @@ const groups: {
 
 export function Sidebar() {
   const path = usePathname();
+  const router = useRouter();
+  const { actions } = useDemo();
+
+  /* back to the opening state for another take: selection, analyses,
+     transcripts, uploads and tool counters all clear */
+  function resetDemo() {
+    actions.reset();
+    router.push("/");
+  }
+
   return (
     /* white sheet lifted off the canvas — depth instead of a border line */
     <aside className="sticky top-0 z-20 hidden h-screen w-60 shrink-0 flex-col bg-surface-1 shadow-sidebar lg:flex">
@@ -123,6 +134,13 @@ export function Sidebar() {
             검증됨
           </span>
         </div>
+        <button
+          type="button"
+          onClick={resetDemo}
+          className="mx-1 self-start px-2 py-1 text-[10.5px] text-ink-3 transition-colors hover:text-ink-2"
+        >
+          세션 초기화
+        </button>
       </div>
     </aside>
   );
