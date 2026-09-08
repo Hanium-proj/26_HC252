@@ -24,6 +24,7 @@ export type Finding = {
 
 /* Localization agreement (CheXlocalize protocol) — model-level, not per case */
 export const localizationMetrics = [
+  { ko: "기흉 의심", en: "PNEUMOTHORAX", mIoU: 0.58, hitRate: 0.86 },
   { ko: "폐부종 의심", en: "EDEMA", mIoU: 0.63, hitRate: 0.89 },
   { ko: "폐렴 의심", en: "PNEUMONIA", mIoU: 0.61, hitRate: 0.88 },
   { ko: "폐 음영 의심", en: "LUNG OPACITY", mIoU: 0.57, hitRate: 0.83 },

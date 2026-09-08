@@ -6,7 +6,7 @@
  */
 
 import type { AgentBlock, ChatCitation } from "@/lib/data";
-import type { CaseData } from "./cases";
+import { priorOf, type CaseData } from "./cases";
 
 export type ToolName = "흉부 영상 분석" | "문헌 검색" | "임상 정보 분석" | "웹 검색";
 
@@ -69,7 +69,7 @@ const ddx: AgentScript = {
       return [
         {
           type: "p",
-          text: "우하엽 폐포성 음영과 마른기침·미열(37.8도) 경과를 종합하면 지역사회획득 폐렴 가능성이 가장 높습니다. 근거 영역이 실제 음영 위치와 일치하며, 아래 순서로 감별을 제안합니다.",
+          text: "우측 첨부의 얇은 흉막선과 우측 늑골횡격막각의 심부 고랑 징후, 기계환기 중 갑작스러운 산소포화도 저하와 우측 호흡음 감소를 종합하면 기흉 가능성이 가장 높습니다(80%). 앙와위 촬영이라 공기가 전하방에 모여 첨부보다 기저부 소견이 두드러집니다.",
           cites: [paper(1), image],
         },
         {
@@ -78,21 +78,24 @@ const ddx: AgentScript = {
             {
               title: "가장 유력",
               tone: "critical",
-              items: [{ name: "폐렴 47%", reason: "우하엽 음영 + 발열·기침, 근거 위치 일치도 높음", cites: [paper(1), image] }],
+              items: [{ name: "기흉 80%", reason: "첨부 흉막선 + 심부 고랑 징후 · 양압환기 중 발생 — Grad-CAM 근거 영역 2곳이 두 소견 위치와 일치", cites: [paper(1), image] }],
             },
             {
               title: "확장 감별",
               tone: "warning",
-              items: [{ name: "무기폐 37%", reason: "좌하엽 경계 선상 이동 여부 확인 필요 — 부피 감소 동반 시 무기폐 우선", cites: [paper(3)] }],
+              items: [
+                { name: "피부 주름 · 피하기종 허상", reason: "흉막선 바깥으로 폐혈관 음영이 이어지면 주름 — 이 영상은 근거 영역 바깥에 혈관 음영 없음", cites: [paper(2)] },
+                { name: "무기폐 39%", reason: "우측 부분 허탈 동반 가능 — 기흉 해소 후 재평가" },
+              ],
             },
             {
               title: "놓치면 안 됨",
-              tone: "info",
-              items: [{ name: "흉수 동반", reason: "늑골횡격막각 무딤이 경미하게 관찰 — 측와위 촬영으로 배제 권장", cites: [paper(2)] }],
+              tone: "critical",
+              items: [{ name: "긴장성 기흉", reason: "종격동 좌측 편위 · 횡격막 편평화 여부 즉시 확인 — 혈압 96/58, 맥박 118", cites: [paper(1)] }],
             },
           ],
         },
-        { type: "checklist", title: "추가 확인 제안", items: ["혈액검사 · 염증 수치(CRP) 확인", "공기기관지음영 유무 재검토", "과거 영상과 비교 판독"] },
+        { type: "checklist", title: "즉시 확인 제안", items: ["종격동 편위 · 횡격막 편평화 확인", "임상팀 알림 — 흉관 삽입 판단", "폐 초음파로 폐 미끄럼 소실 확인", "환기 압력 설정 검토"] },
       ];
     }
     const [top, second, third] = c.findings;
@@ -141,15 +144,19 @@ const ddx: AgentScript = {
     ];
   },
   followups: (c) =>
-    isPneumonia(c)
-      ? ["외래 치료 가능한 중증도인가요?", "과거 영상과 비교해 주세요"]
-      : ["다음에 어떤 검사가 필요한가요?", "이 검사의 근거 영역을 설명해 주세요"],
+    c.id === "PX-2026-0142"
+      ? ["긴장성 기흉으로 진행할 위험은?", "흉관 삽입 적응증을 알려주세요"]
+      : isPneumonia(c)
+        ? ["외래 치료 가능한 중증도인가요?", "과거 영상과 비교해 주세요"]
+        : ["다음에 어떤 검사가 필요한가요?", "이 검사의 근거 영역을 설명해 주세요"],
 };
 
 function nextSteps(c: CaseData): string[] {
   switch (c.findings[0].en) {
     case "PNEUMONIA":
       return ["혈액검사 · 염증 수치(CRP) 확인", "객담 배양 검사", "과거 영상과 비교 판독"];
+    case "PNEUMOTHORAX":
+      return ["종격동 편위 여부 즉시 확인", "폐 초음파로 폐 미끄럼 소실 확인", "흉관 삽입 후 추적 촬영"];
     case "EDEMA":
       return ["BNP · 심초음파로 심인성 여부 확인", "이뇨제 투여 후 6-12시간 내 재촬영", "산소 공급 · 산소포화도 지속 감시"];
     case "PLEURAL EFFUSION":
@@ -221,7 +228,7 @@ const compare: AgentScript = {
         ]
       : [
           { name: "질문 이해", ms: 450 },
-          { name: "과거 영상 불러오기", tool: "흉부 영상 분석", ms: 900, detail: `${PRIOR_DATE} PA 1건` },
+          { name: "과거 영상 불러오기", tool: "흉부 영상 분석", ms: 900, detail: `${priorOf(c)?.date ?? PRIOR_DATE} 촬영 1건` },
           { name: "두 시점 정합 · 차이 계산", tool: "흉부 영상 분석", ms: 1200, detail: "차이 영역 1곳" },
           { name: "근거 통합", ms: 700 },
         ],
@@ -243,14 +250,15 @@ const compare: AgentScript = {
     }
     if (top.en === "NO FINDING") {
       return [
-        { type: "p", text: `${PRIOR_DATE} 촬영과 정합한 결과 새로 나타난 음영이나 윤곽 변화가 없습니다. 심흉곽비와 횡격막 높이도 이전과 같은 범위입니다.`, cites: [image] },
+        { type: "p", text: `${priorOf(c)?.date ?? PRIOR_DATE} 촬영과 정합한 결과 새로 나타난 음영이나 윤곽 변화가 없습니다. 심흉곽비와 횡격막 높이도 이전과 같은 범위입니다.`, cites: [image] },
         { type: "checklist", title: "비교 요약", items: ["신규 음영 없음", "심흉곽비 변화 없음", "늑골횡격막각 양측 예리"] },
       ];
     }
+    const priorDate = priorOf(c)?.date ?? PRIOR_DATE;
     return [
       {
         type: "p",
-        text: `${PRIOR_DATE} 촬영과 정합한 결과 ${top.note} 영역이 새로 나타났습니다. 이전 영상에서는 같은 위치에 유의한 음영이 없었으므로 급성 경과로 해석합니다. 심흉곽비와 횡격막 높이는 이전과 같은 범위입니다.`,
+        text: `${priorDate} 촬영과 정합한 결과 ${top.note} 영역이 새로 나타났습니다. 이전 영상에서는 같은 위치에 유의한 음영이 없었으므로 급성 경과로 해석합니다. 심흉곽비와 횡격막 높이는 이전과 같은 범위입니다.`,
         cites: [image],
       },
       {
@@ -453,6 +461,60 @@ const edema: AgentScript = {
   followups: () => ["앙와위 AP 촬영이라 보정이 필요한 소견은?", "이뇨제 반응 평가를 위한 재촬영 시점과 호전 기준은?"],
 };
 
+/* PX-2026-0142: tension risk and chest drain decision */
+const chestTube: AgentScript = {
+  id: "chest-tube",
+  match: /흉관|삽입|긴장성|처치|치료|진행|위험/,
+  caseIds: ["PX-2026-0142"],
+  citations: 2,
+  verdict: () => ({ overall: "ACCEPT", agreement: 0.83 }),
+  steps: () => [
+    { name: "질문 이해", ms: 450 },
+    { name: "진료 가이드라인 검색", tool: "문헌 검색", ms: 1300, detail: "BTS 흉막 질환 2023 · 기계환기 중 기흉" },
+    { name: "임상 정보 분석", tool: "임상 정보 분석", ms: 800, detail: "혈압 · 맥박 · 환기 설정 대조" },
+    { name: "흉부 영상 분석", tool: "흉부 영상 분석", ms: 900, detail: "종격동 위치 · 횡격막 형태 확인" },
+    { name: "근거 통합", ms: 600 },
+  ],
+  blocks: () => [
+    {
+      type: "p",
+      text: "기계환기 중 발생한 기흉은 양압으로 공기가 계속 유입돼 크기와 무관하게 긴장성으로 진행할 수 있습니다. 현재 혈압 96/58과 맥박 118은 이미 순환 영향을 시사하므로, 가이드라인은 이 상황에서 흉관 삽입을 권고합니다.",
+      cites: [paper(1)],
+    },
+    {
+      type: "ddx",
+      buckets: [
+        {
+          title: "긴장성 진행 위험 요인 · 현재 해당",
+          tone: "critical",
+          items: [
+            { name: "양압 기계환기 중", reason: "흡기마다 흉막강으로 공기 유입 — 자연 흡수 기대 불가", cites: [paper(1)] },
+            { name: "저혈압 · 빈맥", reason: "혈압 96/58 · 맥박 118 — 정맥 환류 저하 징후" },
+          ],
+        },
+        {
+          title: "영상에서 확인할 것",
+          tone: "warning",
+          items: [
+            { name: "종격동 편위", reason: "기관 · 심장 음영이 좌측으로 밀렸는지", cites: [image] },
+            { name: "횡격막 편평화 · 심부 고랑 심화", reason: "앙와위 긴장성 기흉의 대표 소견", cites: [paper(2)] },
+          ],
+        },
+        {
+          title: "처치 기준",
+          tone: "info",
+          items: [
+            { name: "흉관 삽입", reason: "기계환기 환자 기흉은 크기 무관 권고 — 긴장성 징후 시 즉시 바늘 감압 후 삽입", cites: [paper(1)] },
+            { name: "삽입 후 추적 촬영", reason: "폐 재팽창과 흉관 위치 확인" },
+          ],
+        },
+      ],
+    },
+    { type: "checklist", title: "지금 할 일", items: ["임상팀에 긴장성 위험 즉시 알림", "환기 압력(PEEP) 설정 검토", "흉관 삽입 후 1-2시간 내 추적 촬영", "반대측 기흉 여부 함께 확인"] },
+  ],
+  followups: () => ["이 검사의 근거 영역을 설명해 주세요", "과거 영상과 비교해 주세요"],
+};
+
 /* Scenario turn 2 (PX-2026-0125): what a supine portable AP does to the read */
 const apLimits: AgentScript = {
   id: "ap-limits",
@@ -594,7 +656,7 @@ const fallback: AgentScript = {
 
 /* Order matters: specific intents before broad ones */
 /* Case-scoped scenario scripts first, then specific intents, then broad ones */
-const SCRIPTS: AgentScript[] = [edemaFollowup, apLimits, edema, nodule, severity, compare, effusion, evidence, next, ddx, fallback];
+const SCRIPTS: AgentScript[] = [edemaFollowup, apLimits, edema, chestTube, nodule, severity, compare, effusion, evidence, next, ddx, fallback];
 
 export function pickScript(query: string, c: CaseData): AgentScript {
   const q = query.trim();

@@ -50,10 +50,11 @@ mock 은 `lib/demo/api.ts` 한 파일에 모여 있고, 백엔드 `/agent/stream
 - `lib/demo/literature-script.ts` — 질의 의도별 문헌 결과
 - `lib/demo/store.tsx` — 화면 간 공유 상태 (Context + sessionStorage)
 
-## 모델 실제 출력 (PX-2026-0125)
+## 모델 실제 출력 (PX-2026-0142 · PX-2026-0125)
 
-`public/xray/model/` 의 6장은 비전 파이프라인이 실제로 낸 결과다
-(루트 `image.png` 2x3 그리드를 패널 경계 검출로 분리):
+`public/xray/model/<케이스>/` 의 6장씩은 비전 파이프라인이 실제로 낸 결과다
+(2x3 그리드 figure 를 패널 경계 검출로 분리). 0142 = Pneumothorax AP p=0.803,
+0125 = Edema AP p=0.814:
 
 - `original.png` 원본 AP 촬영 / `lung-mask.png` 폐 분할 마스크
 - `gradcam-raw.png` · `gradcam-masked.png` Grad-CAM (raw / 마스크 적용)
