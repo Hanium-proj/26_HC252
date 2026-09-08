@@ -16,7 +16,7 @@ import {
 import { Film, ViewerToolbar, PatientStrip, type Overlay, type Preset } from "@/components/film";
 import { Rich } from "@/components/rich";
 import { LocatorGlyph, IconArrowRight, IconPaperclip, IconChevronDown, IconCheck } from "@/components/icons";
-import { analysisSteps, filmCorners, filmView, topFinding } from "@/lib/demo/cases";
+import { analysisSteps, filmCorners, filmView, priorOf, topFinding } from "@/lib/demo/cases";
 import { useDemo, useCurrentCase } from "@/lib/demo/store";
 import { runAnalysis } from "@/lib/demo/api";
 import { Aborted } from "@/lib/demo/delay";
@@ -99,13 +99,15 @@ export default function AnalysisPage() {
   /* viewer overlay shows the top finding's regions once results exist */
   const regions = analyzed ? c.regions[topFinding(c).en] ?? [] : [];
   const viewer = { preset, zoom };
+  const prior = priorOf(c);
+  const viewLabel = filmView(c).toUpperCase();
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
       {/* ---- input row: viewer + clinical info ---- */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,400px)]">
         <Panel className="anim-rise flex flex-col overflow-hidden">
-          <PatientStrip name={c.patient.name} meta={`${c.id} · ${c.patient.accession}`} right={<Tag>{c.patient.view} + 비교 1건</Tag>} />
+          <PatientStrip name={c.patient.name} meta={`${c.id} · ${c.patient.accession}`} right={<Tag>{c.patient.view}{prior ? " + 비교 1건" : " · 첫 촬영"}</Tag>} />
           <ViewerToolbar
             overlay={overlay}
             onOverlay={setOverlay}
@@ -133,7 +135,29 @@ export default function AnalysisPage() {
               swatch={overlay === "히트맵" && regions.length > 0 ? "jet" : undefined}
               {...viewer}
             />
-            <Film src="/xray/prior.jpeg" label="PRIOR PA" meta="2025-11 · 비교" corners={false} ratio="4 / 5" {...viewer} />
+            {prior ? (
+              <Film src={prior.src} label={`PRIOR ${viewLabel}`} meta={`${prior.date} · 비교`} corners={false} ratio="4 / 5" priorLook={prior.sameStudy} {...viewer} />
+            ) : img?.mask && !upload ? (
+              <Film
+                src={img.pa}
+                maskSrc={analyzed ? img.mask : undefined}
+                label="LUNG FIELD"
+                meta={analyzed ? "폐 분할 적용 · 품질 확인" : "분석 후 폐 분할 표시"}
+                corners={false}
+                ratio="4 / 5"
+                {...viewer}
+              />
+            ) : (
+              <figure className="flex flex-col overflow-hidden rounded-lg bg-letterbox">
+                <div className="flex w-full items-center justify-center bg-film" style={{ aspectRatio: "4 / 5" }}>
+                  <span className="microlabel !text-[#7c848d]">NO PRIOR STUDY</span>
+                </div>
+                <figcaption className="flex h-8 items-center px-3">
+                  <span className="microlabel !text-[#aeb6bf]">PRIOR</span>
+                  <span className="mono ml-auto text-[10.5px] tracking-wide text-[#7c848d]">이전 촬영 없음 · 첫 방문</span>
+                </figcaption>
+              </figure>
+            )}
           </div>
         </Panel>
 

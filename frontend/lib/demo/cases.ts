@@ -66,6 +66,9 @@ export type CaseData = {
   literatureQuery: string;
   images?: CaseImages;
   starters?: string[];
+  /* prior study for the comparison slot. undefined = same film rendered as
+     an older exposure; null = no prior on record (first visit) */
+  prior?: { src: string; date: string } | null;
 };
 
 export const DEFAULT_CASE_ID = "PX-2026-0142";
@@ -514,11 +517,12 @@ const c0125: CaseData = {
     mask: "/xray/model/lung-mask.png",
     view: "ap",
   },
+  prior: null,
   starters: [
-    "양측 음영, 심인성 폐부종으로 봐도 될까요?",
+    "심인성 폐부종으로 봐도 될까요? 감별 포인트는?",
+    "앙와위 AP 촬영에서 보정이 필요한 소견은?",
+    "이뇨제 반응 평가를 위한 재촬영 시점은?",
     "이 검사의 근거 영역을 설명해 주세요",
-    "과거 영상과 비교해 주세요",
-    "다음에 어떤 검사가 필요한가요?",
   ],
 };
 
@@ -533,6 +537,13 @@ export const CASES: Record<string, CaseData> = {
 
 export function getCase(id: string | null | undefined): CaseData {
   return (id && CASES[id]) || CASES[DEFAULT_CASE_ID];
+}
+
+/* Prior-comparison slot: explicit prior, or the same film as an older exposure */
+export function priorOf(c: CaseData): { src: string; date: string; sameStudy: boolean } | null {
+  if (c.prior === null) return null;
+  if (c.prior) return { ...c.prior, sameStudy: false };
+  return { src: c.images?.pa ?? "/xray/pa.png", date: "2025-11", sameStudy: true };
 }
 
 /* Base film + projection for the viewer (upload wins over model output) */

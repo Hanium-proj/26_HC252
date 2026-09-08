@@ -185,6 +185,60 @@ const edema: LiteratureResult = {
   synthesis: { text: "3개 출처가 **심인성 폐부종 우선 감별과 BNP·심초음파 확인** 경로를 일관되게 지지합니다. 근거 충분성 점검을 통과했습니다.", avg: 0.88, adopted: 3, level: "ok" },
 };
 
+const edemaFollowup: LiteratureResult = {
+  key: "edema-followup",
+  sources: [
+    {
+      n: 1,
+      title: "2021 ESC Guidelines for acute and chronic heart failure — acute HF: initial management and reassessment",
+      source: "PubMed · PMID 34447992",
+      grade: "가이드라인",
+      year: 2021,
+      relevance: 0.93,
+      snippet: "급성 심부전에서 이뇨제 투여 후 첫 수 시간 내 소변량과 증상으로 반응을 평가하고, 불충분하면 용량을 두 배로 늘린다. 영상 재평가는 임상 경과에 맞춰 시행한다.",
+    },
+    {
+      n: 2,
+      title: "Radiographic resolution of cardiogenic pulmonary edema lags clinical improvement: a serial chest radiograph study",
+      source: "PMC · PMCID 8345678",
+      grade: "논문",
+      year: 2020,
+      relevance: 0.9,
+      snippet: "임상 호전 후 흉부 X-ray의 폐부종 소견 소실은 평균 12-24시간 지연되며, 24시간 이전 재촬영만으로 반응을 판단하면 오도될 수 있다.",
+    },
+    {
+      n: 3,
+      title: "Lung ultrasound B-lines for monitoring decongestion in acute heart failure",
+      source: "PMC · PMCID 9123456",
+      grade: "논문",
+      year: 2023,
+      relevance: 0.85,
+      snippet: "폐 초음파 B-line 수 감소는 흉부 X-ray보다 빠르게 이뇨 반응을 반영하며, 재촬영 사이의 경과 관찰 지표로 유용하다.",
+    },
+    {
+      n: 4,
+      title: "급성 심부전 동반 양측 폐부종 — 이뇨 치료 후 12시간 추적 사례",
+      source: "원내 유사 사례 · C-3655",
+      grade: "유사 사례",
+      year: 2025,
+      relevance: 0.82,
+      snippet: "이동식 AP 촬영에서 양측 폐문부 음영이 이뇨제 투여 12시간 후 부분 호전, 24시간 직립 촬영에서 뚜렷이 호전되어 심인성 폐부종으로 확인된 사례.",
+    },
+  ],
+  stageResults: ["질문 3건", "후보 52건", "상위 5건", "통과"],
+  reliability: [
+    { ko: "검색 관련성", en: "RELEVANCE", v: 0.93 },
+    { ko: "추론 일관성", en: "CONSISTENCY", v: 0.89 },
+    { ko: "출처 없는 서술 차단", en: "GROUNDEDNESS", v: 0.95 },
+  ],
+  synthesis: {
+    text: "4개 출처가 **24시간 전후 재촬영과 초음파 병행** 방향을 일관되게 지지합니다. 영상 호전 지연을 고려해 조기 재촬영 단독으로 반응을 판단하는 것은 권고하지 않습니다.",
+    avg: 0.88,
+    adopted: 4,
+    level: "ok",
+  },
+};
+
 const nodule: LiteratureResult = {
   key: "nodule",
   sources: [
@@ -378,6 +432,7 @@ const general: LiteratureResult = {
 
 const INTENTS: { match: RegExp; result: LiteratureResult }[] = [
   { match: /결절|nodule|mm/i, result: nodule },
+  { match: /이뇨|재촬영|반응 평가|호전|decongestion/i, result: edemaFollowup },
   { match: /외래|중증도|입원|CURB|PSI/i, result: severity },
   { match: /폐부종|부종|edema|폐울혈/i, result: edema },
   { match: /흉수|심인성|삼출|effusion/i, result: effusion },
