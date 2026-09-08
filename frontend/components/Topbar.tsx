@@ -173,8 +173,8 @@ function Notifications({ onClose }: { onClose: () => void }) {
   const items = [
     { id: "PX-2026-0142", title: "우선 확인 케이스 도착", body: "폐렴 의심 47% · 김성** 여성 58세", time: "09:41", level: "critical" as const },
     state.analyzed["PX-2026-0125"]
-      ? { id: "PX-2026-0125", title: "분석 완료", body: "폐렴 의심 62% · 한지** 남성 52세", time: "방금", level: "critical" as const }
-      : { id: "PX-2026-0125", title: "분석 대기", body: "한지** 남성 52세 · 임상 정보 확인 필요", time: "08:02", level: "info" as const },
+      ? { id: "PX-2026-0125", title: "분석 완료", body: "폐부종 의심 81% · 한지** 남성 68세", time: "방금", level: "critical" as const }
+      : { id: "PX-2026-0125", title: "분석 대기", body: "한지** 남성 68세 · 응급실 이동식 촬영", time: "08:02", level: "info" as const },
     { id: "PX-2026-0128", title: "검토 필요", body: "흉수 의심 71% · 박정** 여성 67세", time: "08:10", level: "warning" as const },
   ];
 

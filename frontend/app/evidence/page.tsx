@@ -6,7 +6,7 @@ import { Panel, PanelHead, Chip, Tag, ProbBar, MicroLabel, Callout, ModelStamp, 
 import { Film, ViewerToolbar, PatientStrip, type Overlay, type Preset } from "@/components/film";
 import { IconCrosshair, IconArrowRight } from "@/components/icons";
 import { localizationMetrics } from "@/lib/data";
-import { filmCorners, topFinding } from "@/lib/demo/cases";
+import { filmCorners, filmView, topFinding } from "@/lib/demo/cases";
 import { useCurrentCase } from "@/lib/demo/store";
 
 export default function EvidencePage() {
@@ -26,7 +26,11 @@ export default function EvidencePage() {
   const agree = metric ? metric.mIoU >= 0.55 : false;
 
   const corner = filmCorners(c);
-  const src = upload?.url ?? "/xray/pa.png";
+  const img = c.images;
+  const src = upload?.url ?? img?.pa ?? "/xray/pa.png";
+  /* real CAM layers exist only for the study the model actually ran on */
+  const real = analyzed && !upload && !!img?.gradcam;
+  const view = filmView(c);
   const heat = overlay === "히트맵";
   const outline = overlay !== "끄기";
   const overlayOpacity = Math.min(1, opacity * 2);
@@ -74,10 +78,42 @@ export default function EvidencePage() {
           onZoom={setZoom}
         />
         <div className="grid grid-cols-2 gap-2 bg-letterbox p-2 xl:grid-cols-4">
-          <Film key={`o-${src}`} src={src} label="PA · OUTLINE" meta={`AI 감지 ${regions.length}건`} outline={outline} regions={regions} corner={corner} {...viewer} />
-          <Film key={`g-${src}`} src={src} label="GRAD-CAM" variant={heat ? "gradcam" : "plain"} outline={!heat && outline} regions={regions} overlayOpacity={overlayOpacity} swatch="jet" corners={false} {...viewer} />
-          <Film key={`e-${src}`} src={src} label="EIGEN-CAM" variant={heat ? "eigencam" : "plain"} outline={!heat && outline} regions={regions} overlayOpacity={overlayOpacity} swatch="teal" corners={false} {...viewer} />
-          <Film src="/xray/ct-axial.png" label="CT AXIAL" meta="LUNG WINDOW · 대조" corners={false} fit="contain" />
+          <Film key={`o-${src}`} src={src} view={view} label={`${view.toUpperCase()} · OUTLINE`} meta={`AI 감지 ${regions.length}건`} outline={outline} regions={regions} corner={corner} {...viewer} />
+          <Film
+            key={`g-${src}`}
+            src={src}
+            view={view}
+            label="GRAD-CAM"
+            meta={real ? "LUNG MASKED" : undefined}
+            variant={heat && !real ? "gradcam" : "plain"}
+            heatSrc={heat && real ? img!.gradcam : undefined}
+            outline={!heat && outline}
+            regions={regions}
+            overlayOpacity={overlayOpacity}
+            swatch="jet"
+            corners={false}
+            {...viewer}
+          />
+          <Film
+            key={`e-${src}`}
+            src={src}
+            view={view}
+            label="EIGEN-CAM"
+            meta={real ? "LUNG MASKED" : undefined}
+            variant={heat && !real ? "eigencam" : "plain"}
+            heatSrc={heat && real ? img!.eigencam : undefined}
+            outline={!heat && outline}
+            regions={regions}
+            overlayOpacity={overlayOpacity}
+            swatch="teal"
+            corners={false}
+            {...viewer}
+          />
+          {img?.mask && !upload ? (
+            <Film src={img.mask} view={view} label="LUNG MASK" meta="SEGMENTATION · 폐 영역" corners={false} zoom={zoom} />
+          ) : (
+            <Film src="/xray/ct-axial.png" label="CT AXIAL" meta="LUNG WINDOW · 대조" corners={false} fit="contain" />
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3">
           {targets.length > 0 ? (

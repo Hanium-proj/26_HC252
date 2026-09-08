@@ -8,7 +8,7 @@ import { Rich } from "@/components/rich";
 import { LocatorGlyph, IconArrowUpRight, IconConsult, IconCrosshair } from "@/components/icons";
 import { kpis } from "@/lib/data";
 import type { Level } from "@/lib/data";
-import { CASES, DEFAULT_CASE_ID, WORKLIST_ORDER, filmCorners, getCase, topFinding } from "@/lib/demo/cases";
+import { CASES, DEFAULT_CASE_ID, WORKLIST_ORDER, filmCorners, filmView, getCase, topFinding } from "@/lib/demo/cases";
 import { useDemo } from "@/lib/demo/store";
 
 type Row = { id: string; patient: string; study: string; finding: string; score: number; level: Level; status: string; time: string };
@@ -31,6 +31,9 @@ export default function Dashboard() {
   const featured = state.analyzed[state.selectedCaseId] ? getCase(state.selectedCaseId) : CASES[DEFAULT_CASE_ID];
   const top = topFinding(featured);
   const regions = featured.regions[top.en] ?? [];
+  const upload = state.uploads[featured.id];
+  const featuredSrc = upload?.url ?? featured.images?.pa ?? "/xray/pa.png";
+  const featuredHeat = !upload ? featured.images?.gradcam : undefined;
 
   function open(id: string) {
     actions.selectCase(id);
@@ -79,11 +82,13 @@ export default function Dashboard() {
         />
         <div className="grid grid-cols-1 gap-5 px-5 pb-5 lg:grid-cols-[minmax(300px,360px)_1fr] xl:grid-cols-[minmax(320px,380px)_1fr_minmax(280px,320px)]">
           <div className="grid grid-cols-2 gap-2">
-            <Film src={state.uploads[featured.id]?.url ?? "/xray/pa.png"} label="PA" outline={regions.length > 0} regions={regions} corners={false} ratio="4 / 5" corner={filmCorners(featured)} />
+            <Film src={featuredSrc} view={filmView(featured)} label={filmView(featured).toUpperCase()} outline={regions.length > 0} regions={regions} corners={false} ratio="4 / 5" corner={filmCorners(featured)} />
             <Film
-              src={state.uploads[featured.id]?.url ?? "/xray/pa.png"}
+              src={featuredSrc}
+              view={filmView(featured)}
               label="GRAD-CAM"
-              variant={regions.length > 0 ? "gradcam" : "plain"}
+              variant={regions.length > 0 && !featuredHeat ? "gradcam" : "plain"}
+              heatSrc={featuredHeat}
               regions={regions}
               corners={false}
               ratio="4 / 5"

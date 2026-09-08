@@ -16,7 +16,7 @@ import {
 import { Film, ViewerToolbar, PatientStrip, type Overlay, type Preset } from "@/components/film";
 import { Rich } from "@/components/rich";
 import { LocatorGlyph, IconArrowRight, IconPaperclip, IconChevronDown, IconCheck } from "@/components/icons";
-import { analysisSteps, filmCorners, topFinding } from "@/lib/demo/cases";
+import { analysisSteps, filmCorners, filmView, topFinding } from "@/lib/demo/cases";
 import { useDemo, useCurrentCase } from "@/lib/demo/store";
 import { runAnalysis } from "@/lib/demo/api";
 import { Aborted } from "@/lib/demo/delay";
@@ -89,7 +89,10 @@ export default function AnalysisPage() {
     setAddingSymptom(false);
   }
 
-  const paSrc = upload?.url ?? "/xray/pa.png";
+  const img = c.images;
+  const paSrc = upload?.url ?? img?.pa ?? "/xray/pa.png";
+  /* real model heatmap only applies to the study it was computed on */
+  const realHeat = analyzed && !upload && img?.gradcam ? img.gradcam : null;
   const fileName = upload?.name ?? c.patient.file.name;
   const fileSize = upload?.size ?? c.patient.file.size;
   const stale = !analyzed && !running;
@@ -117,12 +120,14 @@ export default function AnalysisPage() {
             <Film
               key={paSrc}
               src={paSrc}
-              label="PA"
+              label={filmView(c).toUpperCase()}
               meta={upload ? "업로드 · 방금" : overlay !== "끄기" ? `AI 감지 ${regions.length}건` : "0.4s · 109 kVp"}
               ratio="4 / 5"
               corner={corner}
+              view={filmView(c)}
               outline={overlay !== "끄기" && regions.length > 0}
               variant={overlay === "히트맵" && regions.length > 0 ? "gradcam" : "plain"}
+              heatSrc={overlay === "히트맵" && realHeat ? realHeat : undefined}
               regions={regions}
               overlayOpacity={Math.min(1, opacity * 2)}
               swatch={overlay === "히트맵" && regions.length > 0 ? "jet" : undefined}

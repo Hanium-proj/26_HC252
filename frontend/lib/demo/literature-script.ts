@@ -145,6 +145,46 @@ const effusion: LiteratureResult = {
   synthesis: { text: "3개 출처가 **심인성 흉수 우선 감별**을 일관되게 지지합니다. 근거 충분성 점검을 통과했습니다.", avg: 0.87, adopted: 3, level: "ok" },
 };
 
+const edema: LiteratureResult = {
+  key: "edema",
+  sources: [
+    {
+      n: 1,
+      title: "2021 ESC Guidelines for the diagnosis and treatment of acute and chronic heart failure",
+      source: "PubMed · PMID 34447992",
+      grade: "가이드라인",
+      year: 2021,
+      relevance: 0.94,
+      snippet: "급성 호흡곤란 환자에서 흉부 X-ray의 폐울혈·폐부종 소견과 나트륨이뇨펩티드를 함께 평가해 급성 심부전을 진단하고, 이뇨제 반응을 확인한다.",
+    },
+    {
+      n: 2,
+      title: "Radiographic grading of pulmonary edema on portable chest radiographs: reliability and outcomes",
+      source: "PMC · PMCID 8234567",
+      grade: "논문",
+      year: 2022,
+      relevance: 0.88,
+      snippet: "폐문부 중심 음영과 혈관 재분포는 심인성 폐부종을, 말초 우세 음영은 비심인성 폐부종을 시사하며, 앙와위 촬영에서는 흉수가 과소평가된다.",
+    },
+    {
+      n: 3,
+      title: "급성 심부전 동반 양측 폐부종 — 이뇨 치료 후 12시간 추적 사례",
+      source: "원내 유사 사례 · C-3655",
+      grade: "유사 사례",
+      year: 2025,
+      relevance: 0.82,
+      snippet: "이동식 AP 촬영에서 양측 폐문부 음영이 이뇨제 투여 12시간 후 뚜렷이 호전되어 심인성 폐부종으로 확인된 사례.",
+    },
+  ],
+  stageResults: ["질문 3건", "후보 48건", "상위 5건", "통과"],
+  reliability: [
+    { ko: "검색 관련성", en: "RELEVANCE", v: 0.92 },
+    { ko: "추론 일관성", en: "CONSISTENCY", v: 0.88 },
+    { ko: "출처 없는 서술 차단", en: "GROUNDEDNESS", v: 0.95 },
+  ],
+  synthesis: { text: "3개 출처가 **심인성 폐부종 우선 감별과 BNP·심초음파 확인** 경로를 일관되게 지지합니다. 근거 충분성 점검을 통과했습니다.", avg: 0.88, adopted: 3, level: "ok" },
+};
+
 const nodule: LiteratureResult = {
   key: "nodule",
   sources: [
@@ -339,6 +379,7 @@ const general: LiteratureResult = {
 const INTENTS: { match: RegExp; result: LiteratureResult }[] = [
   { match: /결절|nodule|mm/i, result: nodule },
   { match: /외래|중증도|입원|CURB|PSI/i, result: severity },
+  { match: /폐부종|부종|edema|폐울혈/i, result: edema },
   { match: /흉수|심인성|삼출|effusion/i, result: effusion },
   { match: /심비대|심흉곽|심부전|cardiomegaly/i, result: cardiomegaly },
   { match: /병변|결절성|국소 음영|CT|흡연|lesion/i, result: lesion },

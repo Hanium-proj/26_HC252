@@ -31,7 +31,7 @@ const DEFAULT_REGIONS: Region[] = [
  */
 
 type Variant = "plain" | "gradcam" | "eigencam";
-type View = "pa" | "lateral";
+type View = "pa" | "ap" | "lateral";
 
 /* Window/level presets: CSS approximation of a DICOM W/L change */
 export type Preset = "폐" | "뼈" | "연부조직";
@@ -58,6 +58,7 @@ export function Film({
   overlayOpacity,
   preset = "폐",
   zoom = false,
+  heatSrc,
 }: {
   variant?: Variant;
   view?: View;
@@ -75,6 +76,9 @@ export function Film({
   overlayOpacity?: number;
   preset?: Preset;
   zoom?: boolean;
+  /* real model heatmap (already blended over the radiograph); drawn above
+     the base image at the overlay opacity so the slider still works */
+  heatSrc?: string;
 }) {
   const zoomStyle = { transform: zoom ? "scale(1.18)" : "scale(1)", transformOrigin: "50% 45%" };
   return (
@@ -89,8 +93,18 @@ export function Film({
               className={`h-full w-full transition-[transform,filter] duration-300 ease-out ${fit === "contain" ? "object-contain" : "object-cover"}`}
               style={{ filter: PRESETS[preset].filter, ...zoomStyle }}
             />
+            {heatSrc && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={heatSrc}
+                alt=""
+                aria-hidden="true"
+                className={`anim-rise absolute inset-0 h-full w-full transition-[transform,opacity] duration-300 ease-out ${fit === "contain" ? "object-contain" : "object-cover"}`}
+                style={{ opacity: overlayOpacity ?? 0.85, ...zoomStyle }}
+              />
+            )}
             {(variant !== "plain" || outline) && (
-              <HeatOverlay variant={variant} outline={outline} regions={regions} opacity={overlayOpacity} style={zoomStyle} />
+              <HeatOverlay variant={heatSrc ? "plain" : variant} outline={outline} regions={regions} opacity={overlayOpacity} style={zoomStyle} />
             )}
           </>
         ) : (
@@ -149,7 +163,7 @@ function DicomCorners({ view, info, wl, zoom }: { view: View; info: CornerInfo; 
         ZOOM {zoom}%
       </div>
       <div className={`absolute bottom-2 right-2.5 text-right ${cornerText}`}>
-        {view === "pa" ? "PA ERECT" : "LAT"} · 1/2
+        {view === "pa" ? "PA ERECT" : view === "ap" ? "AP SUPINE" : "LAT"} · 1/2
         <br />
         {info.acc}
       </div>
@@ -238,11 +252,7 @@ function HeatOverlay({
 /* ---------- placeholder radiograph art ---------- */
 
 function ChestArt({ variant, view, outline }: { variant: Variant; view: View; outline: boolean }) {
-  return view === "pa" ? (
-    <PaArt variant={variant} outline={outline} />
-  ) : (
-    <LateralArt />
-  );
+  return view === "lateral" ? <LateralArt /> : <PaArt variant={variant} outline={outline} />;
 }
 
 function PaArt({ variant, outline }: { variant: Variant; outline: boolean }) {

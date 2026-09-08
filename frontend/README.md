@@ -50,6 +50,20 @@ mock 은 `lib/demo/api.ts` 한 파일에 모여 있고, 백엔드 `/agent/stream
 - `lib/demo/literature-script.ts` — 질의 의도별 문헌 결과
 - `lib/demo/store.tsx` — 화면 간 공유 상태 (Context + sessionStorage)
 
+## 모델 실제 출력 (PX-2026-0125)
+
+`public/xray/model/` 의 6장은 비전 파이프라인이 실제로 낸 결과다
+(루트 `image.png` 2x3 그리드를 패널 경계 검출로 분리):
+
+- `original.png` 원본 AP 촬영 / `lung-mask.png` 폐 분할 마스크
+- `gradcam-raw.png` · `gradcam-masked.png` Grad-CAM (raw / 마스크 적용)
+- `eigencam-raw.png` · `eigencam-masked.png` Eigen-CAM (raw / 마스크 적용)
+
+`lib/demo/cases.ts` 의 `images` 필드에 연결돼 있어서 분석 · 근거 · 대시보드 화면이
+그린 오버레이 대신 이 이미지를 쓴다 (히트맵 토글 = 실제 CAM 레이어, 외곽선 =
+CAM 핫스팟에서 측정한 좌표). 다른 케이스도 같은 형식의 이미지를 넣고 `images` 만
+채우면 된다.
+
 ## 실제 영상 교체
 
 X-ray / CT 영상은 `public/xray/` 에 있다. `components/film.tsx` 의 `Film` 에

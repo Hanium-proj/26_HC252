@@ -117,7 +117,7 @@ export default function AgentPage() {
     }
   }
 
-  const starters = c.findings[0].en === "PNEUMONIA" ? chatStarters : [chatStarters[0], chatStarters[1], chatStarters[2], "다음에 어떤 검사가 필요한가요?"];
+  const starters = c.starters ?? (c.findings[0].en === "PNEUMONIA" ? chatStarters : [chatStarters[0], chatStarters[1], chatStarters[2], "다음에 어떤 검사가 필요한가요?"]);
   const sources = pickLiterature(state.literature[c.id] ?? c.literatureQuery).sources;
   const studyDate = c.patient.study.split(" · ")[1]?.split(" ")[0] ?? "";
 

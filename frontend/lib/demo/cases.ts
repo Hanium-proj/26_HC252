@@ -14,6 +14,16 @@ import type { Level, Finding } from "@/lib/data";
 
 export type Region = { cx: number; cy: number; rx: number; ry: number; w: number };
 
+/* Real model output for a study: base film plus pre-rendered CAM layers.
+   Cases without this fall back to the sample film + drawn overlays. */
+export type CaseImages = {
+  pa: string;
+  gradcam?: string;
+  eigencam?: string;
+  mask?: string;
+  view?: "pa" | "ap";
+};
+
 export type Patient = {
   id: string;
   masked: string;
@@ -54,6 +64,8 @@ export type CaseData = {
   /* evidence regions per finding (en key). Missing key = nothing detected */
   regions: Record<string, Region[]>;
   literatureQuery: string;
+  images?: CaseImages;
+  starters?: string[];
 };
 
 export const DEFAULT_CASE_ID = "PX-2026-0142";
@@ -423,68 +435,91 @@ const c0125: CaseData = {
   id: "PX-2026-0125",
   patient: {
     id: "PX-2026-0125",
-    masked: "HAN, J** · M/52",
-    name: "한지** · 남성 · 52세",
-    study: "CHEST PA · 2026-07-13 08:02",
-    studyKo: "흉부 X-ray 정면",
+    masked: "HAN, J** · M/68",
+    name: "한지** · 남성 · 68세",
+    study: "CHEST AP · 2026-07-13 08:02",
+    studyKo: "흉부 X-ray 이동식 AP",
     accession: "ACC 20260713-0015",
-    view: "PA",
-    ageSex: "52세 · 남성",
-    spo2: 97,
-    temp: 38.4,
-    hr: 102,
-    rr: 22,
-    bp: "126/80",
-    smoking: "과거 흡연 (금연 5년)",
-    symptoms: ["고열", "오한", "가래 동반 기침", "2일 지속"],
-    note: "2일 전부터 38도 이상 고열과 오한, 가래 동반 기침. 특이 과거력 없음.",
-    file: { name: "chest_pa_0125.dcm", size: "1.6 MB" },
+    view: "AP",
+    ageSex: "68세 · 남성",
+    spo2: 88,
+    temp: 36.8,
+    hr: 112,
+    rr: 28,
+    bp: "168/98",
+    smoking: "과거 흡연 (금연 10년)",
+    symptoms: ["급성 호흡곤란", "야간 발작성 호흡곤란", "하지 부종", "응급실 내원"],
+    note: "응급실 내원. 어젯밤부터 누우면 심해지는 호흡곤란과 하지 부종. 심부전·고혈압 과거력. 이동식 앙와위 촬영.",
+    file: { name: "chest_ap_0125.dcm", size: "2.1 MB" },
   },
-  row: { patient: "남성 · 52세", study: "PA", finding: "폐렴 의심", score: 79, level: "critical", status: "우선 확인", time: "08:02" },
-  chip: "폐렴 의심 62%",
+  row: { patient: "남성 · 68세", study: "AP", finding: "폐부종 의심", score: 84, level: "critical", status: "우선 확인", time: "08:02" },
+  chip: "폐부종 의심 81%",
   findings: [
-    { ko: "폐렴 의심", en: "PNEUMONIA", prob: 0.62, threshold: 0.32, level: "critical", loc: { x: 0.7, y: 0.5 }, note: "좌하엽 폐포성 음영" },
-    { ko: "폐 음영 의심", en: "LUNG OPACITY", prob: 0.55, threshold: 0.35, level: "warning", loc: { x: 0.68, y: 0.55 }, note: "좌하엽 집중" },
-    { ko: "흉수", en: "PLEURAL EFFUSION", prob: 0.33, threshold: 0.36, level: "neutral", loc: { x: 0.74, y: 0.85 }, note: "좌측 경미 둔화" },
+    { ko: "폐부종 의심", en: "EDEMA", prob: 0.81, threshold: 0.35, level: "critical", loc: { x: 0.36, y: 0.58 }, note: "양측 폐문부 중심 음영" },
+    { ko: "심비대 의심", en: "CARDIOMEGALY", prob: 0.63, threshold: 0.4, level: "warning", loc: { x: 0.55, y: 0.62 }, note: "심흉곽비 0.58 (AP 보정)" },
+    { ko: "폐 음영 의심", en: "LUNG OPACITY", prob: 0.58, threshold: 0.35, level: "warning", loc: { x: 0.4, y: 0.64 }, note: "양측 하부 분포" },
+    { ko: "흉수 의심", en: "PLEURAL EFFUSION", prob: 0.41, threshold: 0.36, level: "warning", loc: { x: 0.26, y: 0.85 }, note: "우측 늑골횡격막각 둔화" },
+    { ko: "폐렴", en: "PNEUMONIA", prob: 0.27, threshold: 0.32, level: "neutral", loc: { x: 0.3, y: 0.74 }, note: "발열 없음" },
     { ko: "무기폐", en: "ATELECTASIS", prob: 0.22, threshold: 0.34, level: "neutral", loc: { x: 0.68, y: 0.7 }, note: "근거 미약" },
-    { ko: "심비대", en: "CARDIOMEGALY", prob: 0.18, threshold: 0.4, level: "neutral", loc: { x: 0.55, y: 0.62 }, note: "정상 범위" },
-    { ko: "폐 병변", en: "LUNG LESION", prob: 0.15, threshold: 0.38, level: "neutral", loc: { x: 0.33, y: 0.4 }, note: "근거 미약" },
-    { ko: "기흉", en: "PNEUMOTHORAX", prob: 0.05, threshold: 0.3, level: "neutral", loc: { x: 0.72, y: 0.3 }, note: "근거 미약" },
-    { ko: "유의 소견 미검출", en: "NO FINDING", prob: 0.07, threshold: 0.5, level: "neutral", note: "판독의 확인 필요" },
+    { ko: "기흉", en: "PNEUMOTHORAX", prob: 0.04, threshold: 0.3, level: "neutral", loc: { x: 0.72, y: 0.3 }, note: "근거 미약" },
+    { ko: "유의 소견 미검출", en: "NO FINDING", prob: 0.05, threshold: 0.5, level: "neutral", note: "판독의 확인 필요" },
   ],
-  abnormalityScore: 79,
+  abnormalityScore: 84,
   summary: {
     lead:
-      "52세 남성의 흉부 X-ray와 임상 정보를 종합한 결과 **폐렴 의심(62%)**이 최상위 소견입니다. 좌하엽 폐포성 음영과 고열·오한·가래 경과가 판단에 주로 기여했으며, **폐 음영(55%)**이 중첩 소견으로 확인됩니다.",
+      "68세 남성의 이동식 흉부 X-ray와 임상 정보를 종합한 결과 **폐부종 의심(81%)**이 최상위 소견입니다. 양측 폐문부 중심 음영과 야간 발작성 호흡곤란·하지 부종 경과가 판단에 주로 기여했으며, **심비대(63%) · 흉수(41%)**가 동반 소견으로 확인됩니다.",
     rows: [
-      { k: "폐렴 의심", note: "영상·임상 근거 일치", tone: "critical" },
-      { k: "폐 음영 의심", note: "폐렴과 중첩 가능", tone: "warning" },
-      { k: "흉수 33%", note: "임계값 경계", tone: "neutral" },
+      { k: "폐부종 의심", note: "영상·임상 근거 일치", tone: "critical" },
+      { k: "심비대 의심", note: "심흉곽비 0.58", tone: "warning" },
+      { k: "흉수 의심", note: "우측 늑골횡격막각 둔화", tone: "warning" },
     ],
-    callout: "고열과 빈맥이 동반된 폐렴 의심 소견입니다. 혈액검사·염증 수치와 함께 즉시 판독을 권고합니다.",
+    callout: "산소포화도 88%와 빈맥이 동반된 급성 폐부종 의심 소견입니다. BNP·심초음파 결과와 함께 즉시 판독을 권고합니다.",
     calloutLevel: "warning",
   },
   agentSummary:
-    "좌하엽 폐포성 음영과 고열·오한·가래 경과를 종합하면 **지역사회획득 폐렴** 가능성이 가장 높습니다[1][영상]. 빈맥이 동반되어 **중증도 평가**를 권고합니다.",
+    "양측 폐문부 중심 음영과 심비대, 야간 발작성 호흡곤란·하지 부종을 종합하면 **심인성 폐부종** 가능성이 가장 높습니다[1][영상]. 산소포화도 88%로 **즉시 판독**을 권고합니다.",
   sentenceImportance: [
-    { text: "2일 전부터 38도 이상 고열과 오한", weight: 0.86 },
-    { text: "가래 동반 기침", weight: 0.67 },
-    { text: "체온 38.4도 · 맥박 102", weight: 0.6 },
-    { text: "특이 과거력 없음", weight: 0.18 },
+    { text: "어젯밤부터 누우면 심해지는 호흡곤란과 하지 부종", weight: 0.88 },
+    { text: "심부전·고혈압 과거력", weight: 0.71 },
+    { text: "산소포화도 88% · 호흡수 28", weight: 0.64 },
+    { text: "이동식 앙와위 촬영", weight: 0.21 },
   ],
   tokenImportance: [
-    { token: "고열", weight: 0.88 },
-    { token: "오한", weight: 0.72 },
-    { token: "가래", weight: 0.66 },
-    { token: "맥박 102", weight: 0.58 },
-    { token: "2일 지속", weight: 0.4 },
+    { token: "호흡곤란", weight: 0.9 },
+    { token: "하지 부종", weight: 0.76 },
+    { token: "심부전", weight: 0.72 },
+    { token: "산소포화도 88%", weight: 0.66 },
+    { token: "누우면 심해짐", weight: 0.58 },
+    { token: "앙와위", weight: 0.22 },
   ],
+  /* hotspots measured from the model's masked Grad-CAM (film space) */
   regions: {
-    PNEUMONIA: [{ cx: 270, cy: 330, rx: 64, ry: 54, w: 0.95 }],
-    "LUNG OPACITY": [{ cx: 262, cy: 318, rx: 56, ry: 48, w: 0.8 }],
-    "PLEURAL EFFUSION": [{ cx: 290, cy: 412, rx: 50, ry: 28, w: 0.5 }],
+    EDEMA: [
+      { cx: 142, cy: 290, rx: 48, ry: 84, w: 0.95 },
+      { cx: 291, cy: 228, rx: 36, ry: 46, w: 0.82 },
+    ],
+    CARDIOMEGALY: [{ cx: 218, cy: 340, rx: 82, ry: 66, w: 0.72 }],
+    "LUNG OPACITY": [
+      { cx: 142, cy: 300, rx: 46, ry: 78, w: 0.85 },
+      { cx: 291, cy: 232, rx: 34, ry: 42, w: 0.7 },
+    ],
+    "PLEURAL EFFUSION": [{ cx: 130, cy: 432, rx: 58, ry: 26, w: 0.55 }],
   },
-  literatureQuery: "좌하엽 폐포성 음영 · 고열 동반 성인, 폐렴 중증도 평가와 입원 기준 근거",
+  literatureQuery: "양측 폐문부 음영 · 급성 호흡곤란 성인, 심인성 폐부종 감별과 관리 근거",
+  /* real pipeline output (ViT classifier + lung segmentation + Grad-CAM / Eigen-CAM) */
+  images: {
+    pa: "/xray/model/original.png",
+    gradcam: "/xray/model/gradcam-masked.png",
+    eigencam: "/xray/model/eigencam-masked.png",
+    mask: "/xray/model/lung-mask.png",
+    view: "ap",
+  },
+  starters: [
+    "양측 음영, 심인성 폐부종으로 봐도 될까요?",
+    "이 검사의 근거 영역을 설명해 주세요",
+    "과거 영상과 비교해 주세요",
+    "다음에 어떤 검사가 필요한가요?",
+  ],
 };
 
 export const CASES: Record<string, CaseData> = {
@@ -498,6 +533,11 @@ export const CASES: Record<string, CaseData> = {
 
 export function getCase(id: string | null | undefined): CaseData {
   return (id && CASES[id]) || CASES[DEFAULT_CASE_ID];
+}
+
+/* Base film + projection for the viewer (upload wins over model output) */
+export function filmView(c: CaseData): "pa" | "ap" {
+  return c.images?.view ?? "pa";
 }
 
 /* DICOM corner text for the film viewport */

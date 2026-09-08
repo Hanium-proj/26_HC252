@@ -150,6 +150,8 @@ function nextSteps(c: CaseData): string[] {
   switch (c.findings[0].en) {
     case "PNEUMONIA":
       return ["혈액검사 · 염증 수치(CRP) 확인", "객담 배양 검사", "과거 영상과 비교 판독"];
+    case "EDEMA":
+      return ["BNP · 심초음파로 심인성 여부 확인", "이뇨제 투여 후 6-12시간 내 재촬영", "산소 공급 · 산소포화도 지속 감시"];
     case "PLEURAL EFFUSION":
       return ["흉부 초음파로 흉수량 추정", "BNP · 심초음파 결과 확인", "흉수 천자 필요성 판단"];
     case "LUNG OPACITY":
@@ -382,6 +384,54 @@ const effusion: AgentScript = {
   followups: () => ["흉수 천자 적응증을 알려주세요", "과거 영상과 비교해 주세요"],
 };
 
+const edema: AgentScript = {
+  id: "edema",
+  match: /폐부종|부종|심인성|음영|감별|가능성|봐도|진단|의심|소견|심부전/,
+  caseIds: ["PX-2026-0125"],
+  citations: 3,
+  verdict: () => ({ overall: "ACCEPT", agreement: 0.79 }),
+  steps: () => [
+    { name: "질문 이해", ms: 500 },
+    { name: "작업 계획", ms: 450, detail: "소견 분석 · 근거 확인 · 문헌 검색" },
+    { name: "흉부 영상 분석", tool: "흉부 영상 분석", ms: 1100, detail: "폐 분할 마스크 적용 · 근거 영역 2곳 감지" },
+    { name: "문헌 검색", tool: "문헌 검색", ms: 1300, detail: "가이드라인 1건 · 논문 1건 · 유사 사례 1건" },
+    { name: "임상 정보 분석", tool: "임상 정보 분석", ms: 700, detail: "활력징후 · 병력 대조" },
+    { name: "근거 통합", ms: 800 },
+  ],
+  blocks: () => [
+    {
+      type: "p",
+      text: "양측 폐문부를 중심으로 퍼지는 음영과 심비대, 어젯밤부터 누우면 심해지는 호흡곤란과 하지 부종을 종합하면 심인성 폐부종 가능성이 가장 높습니다(81%). Grad-CAM 근거 영역이 폐 분할 마스크 안의 양측 음영과 일치하며, 아래 순서로 감별을 제안합니다.",
+      cites: [paper(1), image],
+    },
+    {
+      type: "ddx",
+      buckets: [
+        {
+          title: "가장 유력",
+          tone: "critical",
+          items: [{ name: "심인성 폐부종 81%", reason: "양측 폐문부 중심 음영 + 심비대 63% + 심부전 병력 · 기립 시 호전되는 호흡곤란", cites: [paper(1), image] }],
+        },
+        {
+          title: "확장 감별",
+          tone: "warning",
+          items: [
+            { name: "비심인성 폐부종 (ARDS 등)", reason: "발열·감염 징후 없음 — BNP 정상이면 재고려", cites: [paper(2)] },
+            { name: "폐렴 27%", reason: "임계값 미만 · 발열 없음 · 폐엽에 국한된 음영 아님" },
+          ],
+        },
+        {
+          title: "놓치면 안 됨",
+          tone: "info",
+          items: [{ name: "흉수 동반 41%", reason: "우측 늑골횡격막각 둔화 — 앙와위 촬영이라 소량 흉수는 가려질 수 있음", cites: [paper(3)] }],
+        },
+      ],
+    },
+    { type: "checklist", title: "추가 확인 제안", items: ["BNP · 심초음파로 심인성 여부 확인", "이뇨제 투여 후 6-12시간 내 재촬영", "산소 공급 · 산소포화도 지속 감시"] },
+  ],
+  followups: () => ["다음에 어떤 검사가 필요한가요?", "이 검사의 근거 영역을 설명해 주세요"],
+};
+
 const fallback: AgentScript = {
   id: "fallback",
   match: /.*/,
@@ -409,7 +459,7 @@ const fallback: AgentScript = {
 };
 
 /* Order matters: specific intents before broad ones */
-const SCRIPTS: AgentScript[] = [nodule, severity, compare, effusion, evidence, next, ddx, fallback];
+const SCRIPTS: AgentScript[] = [nodule, severity, compare, effusion, evidence, edema, next, ddx, fallback];
 
 export function pickScript(query: string, c: CaseData): AgentScript {
   const q = query.trim();
