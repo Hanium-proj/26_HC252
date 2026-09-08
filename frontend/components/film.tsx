@@ -1,5 +1,22 @@
 import type { ReactNode } from "react";
 import { IconZoomIn, IconContrast, IconRuler, IconCompare, IconExpand, IconChevronDown } from "@/components/icons";
+import type { Region } from "@/lib/demo/cases";
+
+/* DICOM corner text — defaults to the hero case so old call sites stay 1:1 */
+export type CornerInfo = { name: string; sexAge: string; id: string; date: string; acc: string };
+const DEFAULT_CORNER: CornerInfo = {
+  name: "KIM, S**",
+  sexAge: "F/58",
+  id: "PX-2026-0142",
+  date: "2026-07-13 09:41",
+  acc: "ACC 20260713-0042",
+};
+
+/* Evidence regions in 400x500 film space (hero case, right lower lobe) */
+const DEFAULT_REGIONS: Region[] = [
+  { cx: 128, cy: 330, rx: 66, ry: 56, w: 0.94 },
+  { cx: 252, cy: 302, rx: 40, ry: 34, w: 0.62 },
+];
 
 /*
  * Film viewport — the only place X-ray/heatmap placeholder art lives.
@@ -26,6 +43,9 @@ export function Film({
   ratio = "4 / 5",
   fit = "cover",
   className = "",
+  corner,
+  regions,
+  overlayOpacity,
 }: {
   variant?: Variant;
   view?: View;
@@ -38,6 +58,9 @@ export function Film({
   ratio?: string;
   fit?: "cover" | "contain";
   className?: string;
+  corner?: CornerInfo;
+  regions?: Region[];
+  overlayOpacity?: number;
 }) {
   return (
     <figure className={`overflow-hidden rounded-lg bg-letterbox ${className}`}>
@@ -51,14 +74,14 @@ export function Film({
               className={`h-full w-full grayscale ${fit === "contain" ? "object-contain" : "object-cover"}`}
             />
             {(variant !== "plain" || outline) && (
-              <HeatOverlay variant={variant} outline={outline} />
+              <HeatOverlay variant={variant} outline={outline} regions={regions} opacity={overlayOpacity} />
             )}
           </>
         ) : (
           <ChestArt variant={variant} view={view} outline={outline} />
         )}
 
-        {corners && <DicomCorners view={view} />}
+        {corners && <DicomCorners view={view} info={corner ?? DEFAULT_CORNER} />}
       </div>
 
       {(label || meta || swatch) && (
@@ -91,18 +114,18 @@ function HeatSwatch({ kind }: { kind: "jet" | "teal" }) {
 
 const cornerText = "mono text-[10px] leading-[15px] tracking-wide text-[#b8c0c8]/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]";
 
-function DicomCorners({ view }: { view: View }) {
+function DicomCorners({ view, info }: { view: View; info: CornerInfo }) {
   return (
     <>
       <div className={`absolute left-2.5 top-2 ${cornerText}`}>
-        KIM, S**
+        {info.name}
         <br />
-        F/58 · PX-2026-0142
+        {info.sexAge} · {info.id}
       </div>
       <div className={`absolute right-2.5 top-2 text-right ${cornerText}`}>
         KU MEDICAL CENTER
         <br />
-        2026-07-13 09:41
+        {info.date}
       </div>
       <div className={`absolute bottom-2 left-2.5 ${cornerText}`}>
         W 1500 · L -600
@@ -112,7 +135,7 @@ function DicomCorners({ view }: { view: View }) {
       <div className={`absolute bottom-2 right-2.5 text-right ${cornerText}`}>
         {view === "pa" ? "PA ERECT" : "LAT"} · 1/2
         <br />
-        ACC 20260713-0042
+        {info.acc}
       </div>
       {/* laterality marker, always visible like a lead marker */}
       <span className="mono absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#b8c0c8]/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">
@@ -127,7 +150,17 @@ function DicomCorners({ view }: { view: View }) {
  * placeholder art uses, drawn above the image. Coordinates live in the
  * 400x500 film space (right lower zone = viewer left).
  */
-function HeatOverlay({ variant, outline }: { variant: Variant; outline: boolean }) {
+function HeatOverlay({
+  variant,
+  outline,
+  regions = DEFAULT_REGIONS,
+  opacity = 0.8,
+}: {
+  variant: Variant;
+  outline: boolean;
+  regions?: Region[];
+  opacity?: number;
+}) {
   return (
     <svg
       viewBox="0 0 400 500"
@@ -148,21 +181,35 @@ function HeatOverlay({ variant, outline }: { variant: Variant; outline: boolean 
         </radialGradient>
       </defs>
       {variant === "gradcam" && (
-        <g opacity="0.8">
-          <ellipse cx="128" cy="330" rx="66" ry="56" fill="url(#o-hot)" />
-          <ellipse cx="252" cy="302" rx="40" ry="34" fill="url(#o-hot)" opacity="0.55" />
+        <g opacity={opacity} className="transition-opacity duration-300">
+          {regions.map((r, i) => (
+            <ellipse key={i} cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} fill="url(#o-hot)" opacity={r.w} />
+          ))}
         </g>
       )}
       {variant === "eigencam" && (
-        <g opacity="0.75">
-          <ellipse cx="134" cy="320" rx="70" ry="62" fill="url(#o-cool)" />
-          <ellipse cx="250" cy="290" rx="36" ry="32" fill="url(#o-cool)" opacity="0.6" />
+        <g opacity={opacity * 0.95} className="transition-opacity duration-300">
+          {regions.map((r, i) => (
+            <ellipse key={i} cx={r.cx + 4} cy={r.cy - 8} rx={r.rx + 4} ry={r.ry + 6} fill="url(#o-cool)" opacity={r.w} />
+          ))}
         </g>
       )}
+      {/* lesion outlines: solid >90%, 4-3 dash for 50-90% suspect band */}
       {outline && (
         <g fill="none">
-          <ellipse cx="128" cy="330" rx="56" ry="46" stroke="#0bd8b6" strokeWidth="1.8" />
-          <ellipse cx="252" cy="302" rx="34" ry="28" stroke="#0bd8b6" strokeWidth="1.6" strokeDasharray="4 3" opacity="0.85" />
+          {regions.map((r, i) => (
+            <ellipse
+              key={i}
+              cx={r.cx}
+              cy={r.cy}
+              rx={Math.max(12, r.rx - 10)}
+              ry={Math.max(10, r.ry - 10)}
+              stroke="#0bd8b6"
+              strokeWidth={r.w >= 0.9 ? 1.8 : 1.6}
+              strokeDasharray={r.w >= 0.9 ? undefined : "4 3"}
+              opacity={r.w >= 0.9 ? 1 : 0.85}
+            />
+          ))}
         </g>
       )}
     </svg>

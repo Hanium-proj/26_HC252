@@ -500,6 +500,13 @@ export function getCase(id: string | null | undefined): CaseData {
   return (id && CASES[id]) || CASES[DEFAULT_CASE_ID];
 }
 
+/* DICOM corner text for the film viewport */
+export function filmCorners(c: CaseData) {
+  const [name, sexAge] = c.patient.masked.split(" · ");
+  const date = c.patient.study.split(" · ")[1] ?? "";
+  return { name, sexAge, id: c.id, date, acc: c.patient.accession };
+}
+
 /* Top finding that has a location (drives the evidence default target) */
 export function topFinding(c: CaseData): Finding {
   return c.findings.find((f) => f.loc) ?? c.findings[0];
