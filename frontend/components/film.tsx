@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useRef, type PointerEvent, type ReactNode } from "react";
 import { IconZoomIn, IconContrast, IconRuler, IconCompare, IconExpand, IconChevronDown } from "@/components/icons";
 import type { Region } from "@/lib/demo/cases";
 
@@ -423,16 +425,35 @@ function ToolButton({ children, active }: { children: ReactNode; active?: boolea
   );
 }
 
+export type Overlay = "끄기" | "외곽선" | "히트맵";
+
 /*
  * 48px viewer toolbar: W/L presets left, AI-overlay 3-state segment +
- * opacity right. Static mock — states are visual.
+ * opacity right. Controlled when `onOverlay` / `onOpacity` are given;
+ * otherwise the props are purely visual.
  */
 export function ViewerToolbar({
   overlay = "히트맵",
+  onOverlay,
+  opacity = 0.4,
+  onOpacity,
 }: {
-  overlay?: "끄기" | "외곽선" | "히트맵";
+  overlay?: Overlay;
+  onOverlay?: (o: Overlay) => void;
+  opacity?: number;
+  onOpacity?: (v: number) => void;
 }) {
-  const segs: Array<"끄기" | "외곽선" | "히트맵"> = ["끄기", "외곽선", "히트맵"];
+  const segs: Overlay[] = ["끄기", "외곽선", "히트맵"];
+  const track = useRef<HTMLDivElement>(null);
+  const pct = Math.round(opacity * 100);
+
+  function setFromPointer(e: PointerEvent<HTMLDivElement>) {
+    const el = track.current;
+    if (!el || !onOpacity) return;
+    const r = el.getBoundingClientRect();
+    onOpacity(Math.min(1, Math.max(0.1, (e.clientX - r.left) / r.width)));
+  }
+
   return (
     <div className="flex h-12 items-center justify-between gap-3 px-3">
       <div className="flex items-center gap-1">
@@ -442,10 +463,10 @@ export function ViewerToolbar({
         <ToolButton><IconExpand className="h-[18px] w-[18px]" /></ToolButton>
         <button
           type="button"
-          className="ml-1 flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-2 transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-ink"
+          className="ml-1 flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-[12.5px] font-medium text-ink-2 transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-ink"
         >
           <IconContrast className="h-[16px] w-[16px]" />
-          폐 프리셋
+          <span className="hidden xl:inline">폐 프리셋</span>
           <IconChevronDown className="h-[14px] w-[14px] text-ink-3" />
         </button>
       </div>
@@ -457,7 +478,9 @@ export function ViewerToolbar({
             <button
               key={s}
               type="button"
-              className={`h-7 rounded-[5px] px-2.5 text-[12px] font-medium transition-colors duration-150 ease-out ${
+              onClick={() => onOverlay?.(s)}
+              aria-pressed={s === overlay}
+              className={`h-7 whitespace-nowrap rounded-[5px] px-2.5 text-[12px] font-medium transition-colors duration-150 ease-out ${
                 s === overlay
                   ? "bg-white text-ink shadow-[0_1px_3px_rgba(22,24,29,0.12)]"
                   : "text-ink-3 hover:text-ink-2"
@@ -468,11 +491,25 @@ export function ViewerToolbar({
           ))}
         </div>
         <div className="hidden items-center gap-2 lg:flex">
-          <div className="relative h-1 w-16 rounded-sm bg-hairline">
-            <div className="absolute inset-y-0 left-0 w-[40%] rounded-sm bg-line-strong" />
-            <span className="absolute left-[40%] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_3px_rgba(22,24,29,0.3)]" />
+          <div
+            ref={track}
+            role="slider"
+            aria-label="오버레이 불투명도"
+            aria-valuenow={pct}
+            className={`relative h-1 w-16 rounded-sm bg-hairline ${onOpacity ? "cursor-pointer py-2 -my-2 box-content" : ""}`}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setFromPointer(e);
+            }}
+            onPointerMove={(e) => e.buttons === 1 && setFromPointer(e)}
+          >
+            <div className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-sm bg-line-strong" style={{ width: `${pct}%` }} />
+            <span
+              className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_3px_rgba(22,24,29,0.3)]"
+              style={{ left: `${pct}%` }}
+            />
           </div>
-          <span className="mono text-[11px] text-ink-3">40%</span>
+          <span className="mono w-8 text-[11px] text-ink-3 tnum">{pct}%</span>
         </div>
       </div>
     </div>

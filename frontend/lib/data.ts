@@ -7,8 +7,6 @@
  * "확인·판독", integer probabilities, no engineering jargon.
  */
 
-import { CASES, DEFAULT_CASE_ID } from "@/lib/demo/cases";
-
 export type Level = "critical" | "warning" | "ok" | "info" | "neutral";
 
 export const MODEL_STAMP = "CXR-Net v2.4 · 2026-07-13 09:41";
@@ -113,22 +111,3 @@ export const levelText: Record<Level, string> = {
   info: "분석 중",
   neutral: "확인 대기",
 };
-
-/* ---------- back-compat: default case + default literature set ----------
- * Screens are migrating to lib/demo/store.tsx; until then the static
- * exports resolve to the hero case so nothing renders differently. */
-const hero = CASES[DEFAULT_CASE_ID];
-export const patient = hero.patient;
-export const findings = hero.findings;
-export const abnormalityScore = hero.abnormalityScore;
-export const sentenceImportance = hero.sentenceImportance;
-export const tokenImportance = hero.tokenImportance;
-
-export const worklist: WorkItem[] = [
-  { id: "PX-2026-0142", patient: "여성 · 58세", study: "PA+LAT", finding: "폐렴 의심", score: 87, level: "critical", status: "우선 확인", time: "09:41", selected: true },
-  { id: "PX-2026-0139", patient: "남성 · 71세", study: "PA", finding: "폐 음영 의심", score: 64, level: "warning", status: "검토 필요", time: "09:12" },
-  { id: "PX-2026-0137", patient: "여성 · 44세", study: "PA", finding: "유의 소견 미검출", score: 12, level: "neutral", status: "확인 대기", time: "08:55" },
-  { id: "PX-2026-0131", patient: "남성 · 63세", study: "PA+LAT", finding: "심비대 의심", score: 58, level: "warning", status: "검토 필요", time: "08:33" },
-  { id: "PX-2026-0128", patient: "여성 · 67세", study: "PA", finding: "흉수 의심", score: 71, level: "warning", status: "검토 필요", time: "08:10" },
-  { id: "PX-2026-0125", patient: "남성 · 52세", study: "PA", finding: "분석 중", score: -1, level: "info", status: "분석 중", time: "08:02" },
-];
