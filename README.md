@@ -51,5 +51,10 @@ User Query
 
 ## 현재 상태
 
-- frontend: 5개 화면 목업 완성 (대시보드 / 분류 / 근거 / 에이전트 / 문헌)
-- backend: 스켈레톤. 계약(`app/schemas/`)과 `/health` 만 동작
+- frontend: 5개 화면 목업 완성 (대시보드 / 분류 / 근거 / 에이전트 / 문헌).
+  아직 mock 파이프라인 위에서 동작하며 backend와 연결돼 있지 않다
+- backend: **end-to-end 동작**. 질문 + 영상을 넣으면 판정(ACCEPT / CAUTION /
+  REJECT / NEED_MORE_EVIDENCE)까지 나온다. `POST /agent/run`, `/agent/stream`
+  - 변경 내역과 실행 방법: [docs/WHATS_CHANGED.md](docs/WHATS_CHANGED.md)
+  - 논문 실행 사례: [docs/DEMO_CASES_SUMMARY.md](docs/DEMO_CASES_SUMMARY.md)
+- 미구현(의도적): VQA, Quantifier, Qwen 최종 문장 생성, RunPod 실시간 추론

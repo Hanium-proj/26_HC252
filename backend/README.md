@@ -35,9 +35,25 @@ app/
 
 ## 현재 상태
 
-스켈레톤이다. `/health` 만 동작하고 나머지 라우트는 501을 반환한다.
-각 모듈은 시그니처와 docstring만 있고 `NotImplementedError` 를 던진다.
-docstring에 구현 시 주의할 점을 적어 뒀다.
+파이프라인이 end-to-end 로 동작한다. Gatekeeper → Planner → Vision tools →
+Knowledge/Case RAG → Trust Resolver 를 거쳐 판정(ACCEPT / CAUTION / REJECT /
+NEED_MORE_EVIDENCE)을 반환한다. 진입점은 `app/agents/pipeline.py`,
+HTTP 는 `POST /agent/run` 과 `/agent/stream`(SSE).
+
+**GPU 없이 돈다.** `app/tools/vision/_store.py` 가 학습 후 미리 산출해 둔
+test split 예측과 CAM 정합성 지표를 읽는다. 실행 전 경로를 지정한다:
+
+```bash
+export GLASS_HANDOFF_DIR=/path/to/glass_agent_handoff_20260829
+```
+
+RAG 를 쓰려면 Qdrant 서버가 필요하다. **이미지는 v1.17.1 로 고정**하고
+`.env` 에 `QDRANT_URL` 을 채운다(비우면 로컬 파일 모드라 적재에 41분 걸린다).
+자세한 내용과 막히는 지점은 [docs/WHATS_CHANGED.md](../docs/WHATS_CHANGED.md).
+
+미구현으로 남긴 것(의도적): `tools/vision/vqa.py`, `quantifier.py`,
+`synthesis/qwen.py`, `runpod_client.py`. 호출되면 근거 결손으로 처리되어
+Trust 판정에 그대로 반영된다.
 
 ## 검사
 
