@@ -44,3 +44,6 @@ mimic-cxr-*
 
 # Vercel CLI link metadata
 .vercel/
+
+# MIMIC 파생 산출물(예측·임상 텍스트·사례 JSON) 외부 반출 금지
+backend/outputs/

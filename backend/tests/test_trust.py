@@ -209,11 +209,18 @@ class TestResolveClaim:
         assert resolve_claim(CLAIM, [], missing=False).verdict is Verdict.NEED_MORE_EVIDENCE
 
     def test_conflict_produces_caution(self):
-        ns = norm([gate(), clf(0.9), loc()])
-        ns[0].verdict = False  # classifier 를 반대로 뒤집어 충돌 구성
+        ns = norm([gate(), clf(0.2), loc()])  # classifier 반대(1-p=0.8) vs localizer 지지
         v = resolve_claim(CLAIM, ns, missing=False)
         assert v.verdict is Verdict.CAUTION
         assert v.conflict is not None
+
+    def test_strong_negative_is_strong_opposition(self):
+        """반대 확신도는 1-p. 확실한 음성일수록 반대 점수가 커야 한다."""
+        weak = score(norm([gate(), clf(0.45)])[0])
+        strong = score(norm([gate(), clf(0.05)])[0])
+        assert strong > weak
+        v = resolve_claim(CLAIM, norm([gate(), clf(0.05)]), missing=False)
+        assert v.verdict is Verdict.REJECT
 
     def test_model_evidence_breaks_tie_over_literature(self):
         """문헌은 일반론이고 영상은 이 환자의 사실이다."""
