@@ -19,6 +19,8 @@ async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     """
     expected = get_settings().api_key
     if not expected:
+        if get_settings().environment != "development":
+            raise HTTPException(503, "개발 환경 외에서는 API_KEY 설정이 필요합니다")
         return
     if not x_api_key or not secrets.compare_digest(x_api_key, expected):
         raise HTTPException(

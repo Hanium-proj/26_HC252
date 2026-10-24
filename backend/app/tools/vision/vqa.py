@@ -1,14 +1,32 @@
-"""[담당 A] 영상 질의응답."""
+"""Structured real OpenAI image interpretation adapter."""
 
 from __future__ import annotations
 
+from app.agents.live import describe
+from app.core.storage import get_case
+from app.schemas.common import EvidenceType, ToolName
 from app.schemas.evidence import EvidenceItem
 
 
 async def ask(image_ref: str, **kwargs) -> list[EvidenceItem]:
-    """영상 + 자연어 질문으로 국소 소견을 확인. result=str.
-
-    반환값은 반드시 EvidenceItem 리스트여야 한다. confidence 와 quality 를
-    빠뜨리면 담당 B 의 Trust 계산이 성립하지 않는다.
-    """
-    raise NotImplementedError("담당 A: 영상 질의응답 구현")
+    case = get_case(image_ref)
+    if not case:
+        raise ValueError("업로드된 검사 ID가 필요합니다")
+    report = await describe(
+        case, kwargs.get("query", "관찰 가능한 흉부 영상 소견을 설명해 주세요.")
+    )
+    return [
+        EvidenceItem(
+            source=ToolName.VQA,
+            evidence_type=EvidenceType.MODEL,
+            claim=o["description"],
+            confidence=0.0,
+            metadata={
+                "finding": o["finding"],
+                "answer": o["description"],
+                "certainty": o["certainty"],
+                "location": o["location"],
+            },
+        )
+        for o in report["observations"]
+    ]

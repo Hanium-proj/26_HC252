@@ -17,10 +17,17 @@ openai==1.59.3            # text-embedding-3-large
 qdrant-client==1.12.2     # 벡터 인덱스
 pandas==2.2.3             # Case RAG study 테이블 구성
 rank-bm25==0.2.2          # Phase 2 sparse 검색
-sentence-transformers==3.3.1   # Phase 2 cross-encoder reranking
+# Optional cross-encoder: pip install sentence-transformers==3.3.1
 # transformers==4.47.1    # MedCPT 비교 평가용 (Phase 2 잔여)
 
 # --- 개발 ---
 pytest==8.3.4
 pytest-asyncio==0.25.0
 ruff==0.8.4
+
+# Real local X-ray inference and DICOM decoding
+torch==2.14.1
+torchvision==0.29.1
+torchxrayvision==1.5.7
+Pillow==13.0.0
+pydicom==3.0.2

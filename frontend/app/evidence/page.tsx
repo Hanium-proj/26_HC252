@@ -1,247 +1,160 @@
 "use client";
-
-import { useState } from "react";
-import Link from "next/link";
-import { Panel, PanelHead, Chip, Tag, ProbBar, MicroLabel, Callout, ModelStamp, GhostButton } from "@/components/ui";
-import { Film, ViewerToolbar, PatientStrip, type Overlay, type Preset } from "@/components/film";
-import { IconCrosshair, IconArrowRight } from "@/components/icons";
-import { localizationMetrics } from "@/lib/data";
-import { filmCorners, filmView, topFinding } from "@/lib/demo/cases";
-import { useCurrentCase } from "@/lib/demo/store";
-
+import { PageHeading, Select, Toggle, Disclosure } from "@/components/controls";
+import { WorkflowLink as Link } from "@/components/workflow";
+import { useSessionValue } from "@/lib/live/session";
+import { NextActions } from "@/components/workflow";
+import { useWorkspace } from "@/lib/live/store";
+import {
+  Card,
+  Empty,
+  StudySelect,
+  Viewer,
+  Limitations,
+} from "@/components/live";
 export default function EvidencePage() {
-  const { c, analyzed, upload } = useCurrentCase();
-  const [overlay, setOverlay] = useState<Overlay>("히트맵");
-  const [opacity, setOpacity] = useState(0.4);
-  const [preset, setPreset] = useState<Preset>("폐");
-  const [zoom, setZoom] = useState(false);
-  const viewer = { preset, zoom };
-  const [targetEn, setTargetEn] = useState<string | null>(null);
-
-  /* findings that actually produced a region on this study */
-  const targets = c.findings.filter((f) => (c.regions[f.en] ?? []).length > 0);
-  const target = targets.find((f) => f.en === targetEn) ?? (targets.length ? targets.find((f) => f.en === topFinding(c).en) ?? targets[0] : null);
-  const regions = analyzed && target ? c.regions[target.en] ?? [] : [];
-  const metric = target ? localizationMetrics.find((m) => m.en === target.en) : undefined;
-  const agree = metric ? metric.mIoU >= 0.55 : false;
-
-  const corner = filmCorners(c);
-  const img = c.images;
-  const src = upload?.url ?? img?.pa ?? "/xray/pa.png";
-  /* real CAM layers exist only for the study the model actually ran on */
-  const real = analyzed && !upload && !!img?.gradcam;
-  const view = filmView(c);
-  const heat = overlay === "히트맵";
-  const outline = overlay !== "끄기";
-  const overlayOpacity = Math.min(1, opacity * 2);
-
+  const { studies, selected, select } = useWorkspace();
+  const [target, setTarget] = useSessionValue(
+    `evidence-target:${selected?.id ?? "none"}`,
+    "",
+  );
+  const [overlay, setOverlay] = useSessionValue(
+    `evidence-overlay:${selected?.id ?? "none"}`,
+    true,
+  );
+  const [mode, setMode] = useSessionValue(
+    `evidence-mode:${selected?.id ?? "none"}`,
+    "cam",
+  );
+  const findings = selected?.analysis?.classifier.findings ?? [];
+  const finding = findings.find((f) => f.name === target) ?? findings[0];
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
-      {!analyzed && (
-        <Callout level="info" className="anim-rise">
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            아직 분석하지 않은 검사입니다. 분류 분석을 먼저 실행하면 근거 영역이 여기에 표시됩니다.
-            <Link href="/analysis">
-              <GhostButton className="!h-7 !bg-surface-1 shadow-e1">
-                분류 분석으로 이동
-                <IconArrowRight className="h-3.5 w-3.5" />
-              </GhostButton>
-            </Link>
-          </span>
-        </Callout>
-      )}
-
-      {/* ---- image evidence: original vs Grad-CAM vs Eigen-CAM ---- */}
-      <Panel className="anim-rise overflow-hidden">
-        <PatientStrip
-          name={c.patient.name}
-          meta={`${c.id} · ${c.patient.accession}`}
-          right={
-            <div className="flex items-center gap-2">
-              <Tag>대상 소견 · {target ? target.ko : "없음"}</Tag>
-              {target ? (
-                <Chip level={agree ? "ok" : "warning"}>{agree ? "근거 위치 일치" : "일치도 보통"}</Chip>
-              ) : (
-                <Chip level="neutral">근거 영역 없음</Chip>
-              )}
-            </div>
-          }
-        />
-        <ViewerToolbar
-          overlay={overlay}
-          onOverlay={setOverlay}
-          opacity={opacity}
-          onOpacity={setOpacity}
-          preset={preset}
-          onPreset={setPreset}
-          zoom={zoom}
-          onZoom={setZoom}
-        />
-        <div className="grid grid-cols-2 gap-2 bg-letterbox p-2 xl:grid-cols-4">
-          <Film key={`o-${src}`} src={src} view={view} label={`${view.toUpperCase()} · OUTLINE`} meta={`AI 감지 ${regions.length}건`} outline={outline} regions={regions} corner={corner} {...viewer} />
-          <Film
-            key={`g-${src}`}
-            src={src}
-            view={view}
-            label="GRAD-CAM"
-            meta={real ? "LUNG MASKED" : undefined}
-            variant={heat && !real ? "gradcam" : "plain"}
-            heatSrc={heat && real ? img!.gradcam : undefined}
-            outline={!heat && outline}
-            regions={regions}
-            overlayOpacity={overlayOpacity}
-            swatch="jet"
-            corners={false}
-            {...viewer}
-          />
-          <Film
-            key={`e-${src}`}
-            src={src}
-            view={view}
-            label="EIGEN-CAM"
-            meta={real ? "LUNG MASKED" : undefined}
-            variant={heat && !real ? "eigencam" : "plain"}
-            heatSrc={heat && real ? img!.eigencam : undefined}
-            outline={!heat && outline}
-            regions={regions}
-            overlayOpacity={overlayOpacity}
-            swatch="teal"
-            corners={false}
-            {...viewer}
-          />
-          {img?.mask && !upload ? (
-            <Film src={img.mask} view={view} label="LUNG MASK" meta="SEGMENTATION · 폐 영역" corners={false} zoom={zoom} />
-          ) : (
-            <Film src="/xray/ct-axial.png" label="CT AXIAL" meta="LUNG WINDOW · 대조" corners={false} fit="contain" />
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3">
-          {targets.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 text-[11.5px] text-ink-3">대상 소견</span>
-              {targets.map((f) => {
-                const on = target?.en === f.en;
-                return (
-                  <button
-                    key={f.en}
-                    type="button"
-                    onClick={() => setTargetEn(f.en)}
-                    aria-pressed={on}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors duration-150"
-                    style={on ? { background: "var(--accent-wash-2)", color: "var(--accent-strong)" } : { background: "var(--surface-2)", color: "var(--ink-2)" }}
-                  >
-                    {f.ko}
-                    <span className="mono text-[11px] tnum opacity-80">{Math.round(f.prob * 100)}%</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <span className="text-[11.5px] text-ink-3">{analyzed ? "모델이 주목한 영역이 없습니다 — 폐야 전반 활성도 균일" : "분석 후 대상 소견을 선택할 수 있습니다"}</span>
-          )}
-          <span className="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1">
-            <span className="flex items-center gap-2 text-[11.5px] text-ink-3">
-              <span className="inline-block h-0 w-6 border-t-[1.8px] border-accent" />
-              실선 = 확신 90% 초과
-            </span>
-            <span className="flex items-center gap-2 text-[11.5px] text-ink-3">
-              <span className="inline-block h-0 w-6 border-t-[1.8px] border-dashed border-accent" />
-              점선 = 의심 구간 50–90%
-            </span>
-          </span>
-        </div>
-      </Panel>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        {/* ---- clinical text contribution ---- */}
-        <Panel className="anim-rise">
-          <PanelHead title="임상 문장 기여도" sub="의무기록의 어떤 문장이 판단에 기여했는지" action={<Tag>언어 근거</Tag>} />
-          <div className="flex flex-col gap-5 px-5 pb-5">
-            <div className="flex flex-col gap-2">
-              {c.sentenceImportance.map((s, i) => (
-                <div key={s.text} className="anim-rise rounded-md bg-surface-2 px-3.5 py-2.5" style={{ animationDelay: `${i * 50}ms` }}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-[13px] leading-relaxed text-ink">“{s.text}”</span>
-                    <span className="mono shrink-0 text-[12px] font-semibold text-ink tnum">{s.weight.toFixed(2)}</span>
-                  </div>
-                  <ProbBar value={s.weight} className="mt-2" level={s.weight >= 0.5 ? "info" : "neutral"} threshold={0.5} delay={i * 50} />
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <MicroLabel>KEYWORD CONTRIBUTION</MicroLabel>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {c.tokenImportance.map((t) => (
-                  <span
-                    key={t.token}
-                    className="inline-flex h-7 items-center gap-2 rounded-full px-3 text-[12.5px] font-medium"
-                    style={{
-                      background: `rgba(11, 216, 182, ${0.04 + t.weight * 0.14})`,
-                      color: t.weight >= 0.5 ? "var(--accent-text)" : "var(--ink-2)",
-                    }}
-                  >
-                    {t.token}
-                    <span className="mono text-[10.5px] opacity-70 tnum">{t.weight.toFixed(2)}</span>
-                  </span>
-                ))}
+    <div className="mx-auto max-w-[1400px] space-y-5">
+      <PageHeading
+        eyebrow="VISUAL EVIDENCE"
+        title="판단의 근거를 눈으로 확인하세요"
+        description="활성 지도와 해부학적 분할을 원본 영상에 겹쳐 비교합니다."
+      />
+      <StudySelect studies={studies} selected={selected} onChange={select} />
+      {selected?.analysis ? (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
+          <Card
+            title={
+              mode === "anatomy" ? "폐·심장 해부학적 분할" : "실제 Grad-CAM"
+            }
+            sub={
+              mode === "anatomy"
+                ? "실제 PSPNet 출력 · 청록색 폐, 주황색 심장"
+                : "해당 입력 영상의 분류 모델 기울기로 계산한 활성 지도"
+            }
+          >
+            <Viewer
+              study={selected}
+              cam={
+                overlay
+                  ? mode === "anatomy"
+                    ? selected.analysis.segmentation?.mask_url
+                    : finding?.cam_url
+                  : null
+              }
+            />
+          </Card>
+          <Card
+            title="소견별 모델 근거"
+            sub="모델 점수와 활성 영역은 진단 확률·병변 크기를 뜻하지 않습니다."
+          >
+            <div className="mb-4 block text-sm">
+              근거 레이어
+              <div className="mt-2">
+                <Select
+                  label="근거 레이어"
+                  value={mode}
+                  onChange={setMode}
+                  options={[
+                    { value: "cam", label: "소견별 활성 지도 · Grad-CAM" },
+                    {
+                      value: "anatomy",
+                      label: "폐·심장 해부학적 분할",
+                      disabled: !selected.analysis.segmentation,
+                    },
+                  ]}
+                />
               </div>
-              <p className="mt-3 text-[11px] text-ink-3">색 농도 = 기여 강도. 임상 문장은 영상과 함께 이중 근거로 반영됩니다.</p>
             </div>
-          </div>
-        </Panel>
-
-        {/* ---- localization metrics ---- */}
-        <Panel className="anim-rise flex flex-col">
-          <PanelHead title="근거 위치 정량 평가" sub="CheXlocalize 기준 · 병변 위치 일치도" action={<MicroLabel>N = 668 STUDIES</MicroLabel>} />
-          <div className="flex flex-1 flex-col px-5 pb-5">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-hairline">
-                  <th className="h-9 text-left text-[12px] font-medium text-ink-2">소견</th>
-                  <th className="h-9 text-right text-[12px] font-medium text-ink-2">mIoU</th>
-                  <th className="h-9 text-right text-[12px] font-medium text-ink-2">적중률</th>
-                  <th className="h-9 w-[104px] pl-4 text-left text-[12px] font-medium text-ink-2">일치도</th>
-                </tr>
-              </thead>
-              <tbody>
-                {localizationMetrics.map((m) => {
-                  const on = target?.en === m.en;
-                  return (
-                    <tr
-                      key={m.ko}
-                      className="h-10 border-b border-hairline transition-colors duration-150 last:border-b-0"
-                      style={on ? { background: "var(--accent-wash)" } : undefined}
-                    >
-                      <td className={`pl-2 text-[13px] font-medium ${on ? "text-accent-strong" : "text-ink"}`}>
-                        {m.ko}
-                        <span className="microlabel ml-2 hidden lg:inline">{m.en}</span>
-                      </td>
-                      <td className="mono text-right text-[12.5px] text-ink-2 tnum">{m.mIoU.toFixed(2)}</td>
-                      <td className="mono text-right text-[12.5px] text-ink-2 tnum">{m.hitRate.toFixed(2)}</td>
-                      <td className="pl-4 pr-2">
-                        <ProbBar value={m.mIoU} threshold={0.5} level={m.mIoU >= 0.55 ? "info" : "warning"} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {target && metric ? (
-              <Callout key={target.en} level={agree ? "ok" : "warning"} icon={<IconCrosshair className="h-4 w-4" />} className="anim-rise mt-4">
-                {target.ko} 소견의 근거 영역이 실제 병변 위치와 {agree ? "높게" : "부분적으로"} 일치합니다 (mIoU {metric.mIoU.toFixed(2)} · 적중률 {metric.hitRate.toFixed(2)}).
-                {agree ? " 분류 정확도와 근거 신뢰도를 함께 검증했습니다." : " 판독의가 위치를 직접 확인하는 것을 권고합니다."}
-              </Callout>
-            ) : (
-              <Callout level="ok" icon={<IconCrosshair className="h-4 w-4" />} className="mt-4">
-                이 검사에서는 임계값을 넘는 소견이 없어 위치 근거를 계산하지 않았습니다. 표는 모델 검증 세트 기준 소견별 일치도입니다.
-              </Callout>
+            <div className="block text-sm">
+              대상 소견
+              <div className="mt-2">
+                <Select
+                  label="CAM 대상 소견"
+                  value={finding?.name ?? ""}
+                  disabled={mode === "anatomy"}
+                  onChange={setTarget}
+                  options={findings.map((f) => ({
+                    value: f.name,
+                    label: f.name,
+                  }))}
+                />
+              </div>
+            </div>
+            <Toggle
+              label="원본 위에 레이어 표시"
+              checked={overlay}
+              onChange={setOverlay}
+            />
+            {finding && mode === "cam" && (
+              <dl className="my-6 space-y-4 text-sm">
+                <div className="flex justify-between">
+                  <dt>모델 점수</dt>
+                  <dd className="font-mono">{finding.score.toFixed(4)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt>활성 영역 비율 (CAM ≥ 0.5)</dt>
+                  <dd className="font-mono">
+                    {finding.activation_fraction === null
+                      ? "산출 불가"
+                      : `${(finding.activation_fraction * 100).toFixed(1)}%`}
+                  </dd>
+                </div>
+              </dl>
             )}
-            <ModelStamp className="mt-auto pt-4" />
-          </div>
-        </Panel>
-      </div>
+            {mode === "anatomy" && selected.analysis.segmentation && (
+              <dl className="mb-5 space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <dt>분할된 폐 영역 비율</dt>
+                  <dd>
+                    {(
+                      selected.analysis.segmentation.lung_fraction * 100
+                    ).toFixed(1)}
+                    %
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt>심장/폐영역 픽셀 폭 비율</dt>
+                  <dd>
+                    {selected.analysis.segmentation.heart_to_lung_span_ratio?.toFixed(
+                      3,
+                    ) ?? "산출 불가"}
+                  </dd>
+                </div>
+              </dl>
+            )}
+            <Disclosure title="해석 시 유의사항">
+              <Limitations items={selected.analysis.limitations} />
+            </Disclosure>
+            <p className="mt-5 text-xs leading-relaxed text-ink-3">
+              중앙 크롭 밖은 CAM을 표시하지 않습니다. 해부학적 분할은 병변
+              분할이 아닙니다. 물리적 mm 측정과 임상 CTR은 제공하지 않습니다.
+            </p>
+          </Card>
+        </div>
+      ) : (
+        <Empty>
+          먼저{" "}
+          <Link href="/analysis" className="text-accent">
+            실제 분석을 실행해 주세요 →
+          </Link>
+        </Empty>
+      )}
+      {selected?.analysis && <NextActions finding={finding?.name} />}
     </div>
   );
 }

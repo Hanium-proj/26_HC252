@@ -1,221 +1,252 @@
 "use client";
-
-import Link from "next/link";
+import { PageHeading, Loading } from "@/components/controls";
+import { WorkflowLink as Link } from "@/components/workflow";
+import { useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Panel, PanelHead, Chip, ProbBar, MicroLabel, GhostButton, ModelStamp, Dot } from "@/components/ui";
-import { Film } from "@/components/film";
-import { Rich } from "@/components/rich";
-import { LocatorGlyph, IconArrowUpRight, IconConsult, IconCrosshair } from "@/components/icons";
-import { kpis } from "@/lib/data";
-import type { Level } from "@/lib/data";
-import { CASES, DEFAULT_CASE_ID, WORKLIST_ORDER, filmCorners, filmView, getCase, topFinding } from "@/lib/demo/cases";
-import { useDemo } from "@/lib/demo/store";
-
-type Row = { id: string; patient: string; study: string; finding: string; score: number; level: Level; status: string; time: string };
-
+import { api } from "@/lib/live/api";
+import { useWorkspace } from "@/lib/live/store";
+import type { Study } from "@/lib/live/types";
+import {
+  Card,
+  Empty,
+  ErrorBox,
+  buttonClass,
+  inputClass,
+} from "@/components/live";
 export default function Dashboard() {
+  const { studies, refresh, loading, error, jobs } = useWorkspace();
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [query, setQuery] = useState("");
+  const file = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const { state, actions } = useDemo();
-
-  /* worklist rows come from the store: a case that has not been analyzed
-     yet still shows "분석 중" until the presenter runs it */
-  const rows: Row[] = WORKLIST_ORDER.map((id) => {
-    const c = CASES[id];
-    return state.analyzed[id]
-      ? { id, ...c.row }
-      : { id, patient: c.row.patient, study: c.row.study, finding: "분석 중", score: -1, level: "info", status: "분석 중", time: c.row.time };
-  });
-  const priority = rows.filter((r) => r.level === "critical").length;
-
-  /* featured card follows the selection when that case has results */
-  const featured = state.analyzed[state.selectedCaseId] ? getCase(state.selectedCaseId) : CASES[DEFAULT_CASE_ID];
-  const top = topFinding(featured);
-  const regions = featured.regions[top.en] ?? [];
-  const upload = state.uploads[featured.id];
-  const featuredSrc = upload?.url ?? featured.images?.pa ?? "/xray/pa.png";
-  const featuredHeat = !upload ? featured.images?.gradcam : undefined;
-
-  function open(id: string) {
-    actions.selectCase(id);
-    router.push("/analysis");
+  async function upload(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile) await uploadFile(selectedFile);
   }
-
-  return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
-      {/* ---- KPI strip ---- */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {kpis.map((k, i) => {
-          const value = i === 2 ? String(priority) : k.value;
-          return (
-            <div key={k.label} className="panel anim-rise px-5 py-4" style={{ animationDelay: `${i * 40}ms` }}>
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] font-medium text-ink-2">{k.label}</span>
-                {i === 0 && <Sparkline />}
-              </div>
-              <div className="mt-2.5 flex items-baseline gap-1.5">
-                <span className="mono text-[28px] font-semibold leading-none tracking-tight text-ink tnum">{value}</span>
-                <span className="text-[12px] text-ink-3">{k.unit}</span>
-                <span
-                  className="ml-auto inline-flex h-[18px] items-center rounded-full px-2 text-[11px] font-medium"
-                  style={{ background: `var(--${k.deltaTone}-wash)`, color: `var(--${k.deltaTone}-text)` }}
-                >
-                  {k.delta}
-                </span>
-              </div>
-              <p className="mt-2 text-[11px] text-ink-3">{k.caption}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ---- featured case: 영상 · 예측 · 근거 · 에이전트 통합 ---- */}
-      <Panel key={featured.id} className="anim-rise">
-        <PanelHead
-          title="우선 확인 케이스"
-          sub={`${featured.patient.name} · ${featured.patient.study}`}
-          action={
-            <>
-              <span className="mono hidden text-[11px] tracking-wide text-ink-3 sm:inline">{featured.id}</span>
-              <Chip level={featured.findings[0].level === "neutral" ? "ok" : featured.findings[0].level}>{featured.chip}</Chip>
-            </>
-          }
-        />
-        <div className="grid grid-cols-1 gap-5 px-5 pb-5 lg:grid-cols-[minmax(300px,360px)_1fr] xl:grid-cols-[minmax(320px,380px)_1fr_minmax(280px,320px)]">
-          <div className="grid grid-cols-2 gap-2">
-            <Film src={featuredSrc} view={filmView(featured)} label={filmView(featured).toUpperCase()} outline={regions.length > 0} regions={regions} corners={false} ratio="4 / 5" corner={filmCorners(featured)} />
-            <Film
-              src={featuredSrc}
-              view={filmView(featured)}
-              label="GRAD-CAM"
-              variant={regions.length > 0 && !featuredHeat ? "gradcam" : "plain"}
-              heatSrc={featuredHeat}
-              regions={regions}
-              corners={false}
-              ratio="4 / 5"
-              swatch="jet"
-            />
-          </div>
-
-          <div className="min-w-0">
-            <MicroLabel>AI FINDINGS · TOP 5</MicroLabel>
-            <div className="mt-3 flex flex-col gap-[18px]">
-              {featured.findings.slice(0, 5).map((f, i) => (
-                <div key={f.en}>
-                  <div className="mb-1.5 flex items-center gap-2.5">
-                    <LocatorGlyph loc={f.loc} className="h-5 w-5 shrink-0 text-ink-3" tone="var(--ink-2)" />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{f.ko}</span>
-                    <span className="mono text-[13px] font-semibold text-ink tnum">{Math.round(f.prob * 100)}%</span>
-                  </div>
-                  <ProbBar value={f.prob} threshold={f.threshold} level={f.level} delay={i * 50} />
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 flex items-center justify-between text-[11px] text-ink-3">
-              <span>세로선 = 운영 임계값 · 임계값 이상 소견만 강조</span>
-              <button type="button" onClick={() => open(featured.id)} className="font-medium text-ink-2 transition-colors hover:text-accent">
-                소견 9개 더 보기
-              </button>
-            </p>
-          </div>
-
-          <div className="flex min-w-0 flex-col rounded-lg bg-surface-2 p-4">
-            <MicroLabel>AGENT SUMMARY</MicroLabel>
-            <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">
-              <Rich text={featured.agentSummary} />
-            </p>
-            <div className="mt-auto flex flex-col gap-2 pt-4">
-              <div className="flex gap-2">
-                <Link href="/evidence" className="flex-1" onClick={() => actions.selectCase(featured.id)}>
-                  <GhostButton className="w-full">
-                    <IconCrosshair className="h-4 w-4" />
-                    근거 보기
-                  </GhostButton>
-                </Link>
-                <Link href="/agent" className="flex-1" onClick={() => actions.selectCase(featured.id)}>
-                  <GhostButton className="w-full">
-                    <IconConsult className="h-4 w-4" />
-                    에이전트
-                  </GhostButton>
-                </Link>
-              </div>
-              <ModelStamp />
-            </div>
-          </div>
-        </div>
-      </Panel>
-
-      {/* ---- worklist ---- */}
-      <Panel className="anim-rise">
-        <PanelHead
-          title="판독 워크리스트"
-          sub="오늘 접수 · AI 스코어 내림차순"
-          action={
-            <GhostButton>
-              전체 보기
-              <IconArrowUpRight className="h-3.5 w-3.5" />
-            </GhostButton>
-          }
-        />
-        <div className="overflow-x-auto pb-2">
-          <table className="w-full min-w-[720px]">
-            <thead>
-              <tr className="border-b border-hairline">
-                <Th className="pl-5">검사 ID</Th>
-                <Th>환자</Th>
-                <Th>촬영</Th>
-                <Th>AI 소견</Th>
-                <Th className="text-right">스코어</Th>
-                <Th>상태</Th>
-                <Th className="pr-5 text-right">접수</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((w) => {
-                const selected = w.id === state.selectedCaseId;
-                return (
-                  <tr
-                    key={w.id}
-                    onClick={() => open(w.id)}
-                    className="group h-9 cursor-pointer border-b border-hairline transition-colors duration-150 last:border-b-0 hover:bg-surface-2"
-                    style={selected ? { background: "var(--accent-wash)" } : undefined}
-                  >
-                    <td className="mono whitespace-nowrap pl-5 pr-3 text-[12px] tracking-wide text-ink-2 group-hover:text-ink">{w.id}</td>
-                    <td className="whitespace-nowrap pr-3 text-[13px] text-ink">
-                      <span className="inline-flex items-center gap-2">
-                        {w.level === "critical" && <Dot level="critical" />}
-                        {w.patient}
-                      </span>
-                    </td>
-                    <td className="mono whitespace-nowrap pr-3 text-[12px] text-ink-2">{w.study}</td>
-                    <td className="whitespace-nowrap pr-3 text-[13px] text-ink-2">{w.finding}</td>
-                    <td className="mono whitespace-nowrap pr-3 text-right text-[13px] font-semibold text-ink tnum">{w.score >= 0 ? w.score : "—"}</td>
-                    <td className="whitespace-nowrap pr-3">
-                      <Chip level={w.level} pulse={w.level === "info"}>
-                        {w.status}
-                      </Chip>
-                    </td>
-                    <td className="mono whitespace-nowrap pr-5 text-right text-[12px] text-ink-3 tnum">{w.time}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-    </div>
+  async function uploadFile(selectedFile: File) {
+    if (uploading) return;
+    setDragging(false);
+    setUploading(true);
+    setUploadError("");
+    try {
+      if (selectedFile.size > 15 * 1024 * 1024)
+        throw new Error("영상은 15MB 이하여야 합니다");
+      const body = new FormData();
+      body.append("file", selectedFile);
+      const study = await api<Study>("/studies", { method: "POST", body });
+      await refresh();
+      router.push(`/analysis?study=${study.id}`);
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "업로드 실패");
+    } finally {
+      setUploading(false);
+      if (file.current) file.current.value = "";
+    }
+  }
+  const complete = studies.filter((s) => s.analysis).length;
+  const times = studies.flatMap((s) =>
+    s.analysis ? [s.analysis.latency_ms] : [],
   );
-}
-
-function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`h-9 whitespace-nowrap pr-3 text-left text-[12px] font-medium text-ink-2 ${className}`}>{children}</th>;
-}
-
-/* 32px single-stroke sparkline, no axes */
-function Sparkline() {
+  const metrics = [
+    ["등록된 검사", `${studies.length}건`],
+    ["분석 완료", `${complete}건`],
+    [
+      "분석 대기",
+      `${studies.filter((s) => !s.analysis && jobs[s.id]?.status !== "running").length}건`,
+    ],
+    [
+      "평균 분석 응답",
+      times.length
+        ? `${(times.reduce((a, b) => a + b, 0) / times.length / 1000).toFixed(1)}초`
+        : "측정 전",
+    ],
+  ];
   return (
-    <svg width="64" height="24" viewBox="0 0 64 24" fill="none" className="text-ink-3">
-      <path d="M2 18 L10 15 L18 16 L26 11 L34 13 L42 8 L50 10 L62 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="62" cy="4" r="2" fill="var(--accent-text)" />
-    </svg>
+    <div className="mx-auto max-w-[1400px] space-y-5">
+      <PageHeading
+        eyebrow="READING ROOM"
+        title="오늘의 검사 워크스페이스"
+        description="영상 업로드부터 근거 검토까지, 한 곳에서 이어가세요."
+      >
+        <button
+          className={buttonClass}
+          disabled={uploading}
+          onClick={() => file.current?.click()}
+        >
+          {uploading ? "영상 확인·저장 중…" : "+ 새 X-ray 업로드"}
+        </button>
+        <input
+          aria-label="흉부 영상 업로드"
+          ref={file}
+          type="file"
+          accept="image/png,image/jpeg,.dcm"
+          onChange={upload}
+          className="hidden"
+        />
+      </PageHeading>
+      <ErrorBox message={uploadError || error} />
+      <div className="metric-grid grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {metrics.map(([label, value]) => (
+          <Card key={label} title={label}>
+            <p className="font-mono text-3xl font-semibold">
+              {loading ? "—" : value}
+            </p>
+          </Card>
+        ))}
+      </div>
+      <div
+        className={`upload-surface ${dragging ? "is-dragging" : ""}`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (!uploading) setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node))
+            setDragging(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          const dropped = event.dataTransfer.files[0];
+          if (dropped) void uploadFile(dropped);
+        }}
+      >
+        <div className="upload-symbol" aria-hidden="true">
+          ↥
+        </div>
+        <div className="flex-1">
+          <h2>
+            {dragging
+              ? "여기에 놓으면 업로드됩니다"
+              : "새로운 검사를 시작하세요"}
+          </h2>
+          <p>
+            흉부 영상을 끌어 놓거나 파일을 선택하세요. PNG · JPEG · DICOM, 최대
+            15MB
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={uploading}
+          onClick={() => file.current?.click()}
+        >
+          {uploading ? "업로드 중…" : "파일 선택 →"}
+        </button>
+      </div>
+      <div className="workflow-strip">
+        {[
+          ["01", "영상 등록", "PNG · JPEG · DICOM"],
+          ["02", "AI 분석", "소견과 시각적 근거 확인"],
+          ["03", "근거 검토", "AI 질문과 문헌으로 이어가기"],
+        ].map(([n, t, d]) => (
+          <div className="workflow-step" key={n}>
+            <b>{n}</b>
+            <div>
+              <strong>{t}</strong>
+              <p>{d}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      {uploading && <Loading label="영상을 확인하고 저장하고 있습니다" />}
+      <Card
+        title="검사 워크리스트"
+        sub="업로드한 실제 검사만 표시합니다. PNG·JPEG·단일 프레임 흑백 DICOM, 최대 15MB."
+      >
+        <input
+          aria-label="검사 검색"
+          className={`${inputClass} mb-4 max-w-md`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="파일명 또는 검사 ID 검색"
+        />
+        {loading ? (
+          <Loading label="검사 목록을 불러오고 있습니다" />
+        ) : !studies.length ? (
+          <Empty>등록된 검사가 없습니다. 새 X-ray를 업로드해 주세요.</Empty>
+        ) : (
+          <div className="overflow-x-auto">
+            {!studies.some((s) =>
+              `${s.name} ${s.id}`.toLowerCase().includes(query.toLowerCase()),
+            ) && (
+              <Empty>
+                검색어와 일치하는 검사가 없습니다. 파일명 또는 검사 ID를
+                확인하세요.
+              </Empty>
+            )}
+            <table className="study-table w-full text-left text-sm">
+              <thead className="text-xs text-ink-3">
+                <tr>
+                  {[
+                    "검사 파일",
+                    "등록 시간",
+                    "분석 상태",
+                    "처리 시간",
+                    "열기",
+                  ].map((h) => (
+                    <th key={h} className="p-3 font-medium">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {studies
+                  .filter((s) =>
+                    `${s.name} ${s.id}`
+                      .toLowerCase()
+                      .includes(query.toLowerCase()),
+                  )
+                  .map((s) => (
+                    <tr key={s.id} className="border-t border-hairline">
+                      <td className="p-3">
+                        <p className="font-medium">{s.name}</p>
+                        <p className="mt-1 font-mono text-xs text-ink-3">
+                          {s.id.slice(0, 8)}
+                        </p>
+                      </td>
+                      <td className="p-3 text-ink-2">
+                        {new Date(s.created_at).toLocaleString("ko-KR")}
+                      </td>
+                      <td className="p-3 text-ink-2">
+                        <span
+                          className={`status-pill ${s.analysis ? "is-complete" : ""}`}
+                        >
+                          <span />
+                          {jobs[s.id]?.status === "running"
+                            ? "분석 중"
+                            : s.analysis
+                              ? "분석 완료"
+                              : "분석 대기"}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono">
+                        {s.analysis
+                          ? `${(s.analysis.latency_ms / 1000).toFixed(1)}초`
+                          : "—"}
+                      </td>
+                      <td className="p-3">
+                        <Link
+                          href={`/analysis?study=${s.id}`}
+                          className="btn-secondary"
+                        >
+                          검사 열기 →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+      <p className="text-xs text-ink-3">
+        업로드 영상과 임상 메모는 로컬 서버에 저장되며 분석 요청 시 OpenAI로
+        전달됩니다. 연구용이며 진료 결정을 대체하지 않습니다.
+      </p>
+    </div>
   );
 }

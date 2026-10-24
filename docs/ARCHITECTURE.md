@@ -1,3 +1,5 @@
+> 2026-10-25 현재 실제 로컬 실행 구성은 [README](../README.md)와 [LIVE_API](LIVE_API.md)를 우선 참고합니다. 아래 문서는 기존 팀 배포 구상·EvidencePacket 계약이며, 원래 RunPod 모델이 연결되었다는 의미가 아닙니다.
+
 # 아키텍처
 
 ## 배포 구성

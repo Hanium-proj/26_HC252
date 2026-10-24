@@ -44,3 +44,10 @@ mimic-cxr-*
 
 # Vercel CLI link metadata
 .vercel/
+
+# User-supplied local RAG/model handoff bundles (never commit)
+/Knowledge_RAG*.zip
+/MIMIC_CXR_Similar_Case_RAG*.zip
+/knowledge_chunks.json
+/glass_agent_handoff*.tar.gz
+/README_GLASS_HANDOFF.md

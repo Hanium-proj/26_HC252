@@ -1,287 +1,508 @@
 "use client";
-
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Panel, PanelHead, Chip, Tag, Callout, Disclaimer } from "@/components/ui";
-import { IconConsult } from "@/components/icons";
-import { Message, Composer } from "@/components/chat";
-import { agentTools, chatStarters } from "@/lib/data";
-import type { ChatMsg, AgentStep } from "@/lib/data";
-import { useDemo, useCurrentCase } from "@/lib/demo/store";
-import { streamAgent } from "@/lib/demo/api";
-import { Aborted } from "@/lib/demo/delay";
-import { pickLiterature } from "@/lib/demo/literature-script";
-import type { ToolName } from "@/lib/demo/agent-script";
-
-type AgentMsg = Extract<ChatMsg, { role: "agent" }>;
-
-const now = () => new Date().toTimeString().slice(0, 5);
-
+import { WorkflowLink as Link } from "@/components/workflow";
+import { IconConsult, IconBook } from "@/components/icons";
+import { PageHeading, Disclosure } from "@/components/controls";
+import { useSessionValue } from "@/lib/live/session";
+import { useConversations } from "@/lib/live/conversations";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { streamEvents } from "@/lib/live/api";
+import { useWorkspace } from "@/lib/live/store";
+import type { ChatMessage, Source } from "@/lib/live/types";
+import {
+  Card,
+  ErrorBox,
+  Sources,
+  buttonClass,
+  StudySelect,
+} from "@/components/live";
 export default function AgentPage() {
-  const router = useRouter();
-  const { state, actions } = useDemo();
-  const { c, verdict } = useCurrentCase();
-
-  const saved = state.chat[c.id] ?? [];
-  const savedRef = useRef(saved);
-  savedRef.current = saved;
-
-  /* in-flight exchange lives here until the answer completes, then it is
-     committed to the store (so tokens never hit sessionStorage) */
-  const [pendingUser, setPendingUser] = useState<ChatMsg | null>(null);
-  const [live, setLive] = useState<AgentMsg | null>(null);
-  const [activeTool, setActiveTool] = useState<ToolName | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const messages: ChatMsg[] = [...saved, ...(pendingUser ? [pendingUser] : []), ...(live ? [live] : [])];
-  const streaming = live !== null;
-
-  /* cancel a running answer when the presenter leaves the screen */
-  useEffect(() => () => abortRef.current?.abort(), []);
-
-  /* keep the newest content in view while it streams */
-  const lastText = live?.blocks.length ? JSON.stringify(live.blocks[live.blocks.length - 1]).length : 0;
+  const { studies, selected, select, jobs } = useWorkspace();
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-5">
+      <PageHeading
+        eyebrow="AI CONSULTATION"
+        title="소견을 이해하고, 근거를 연결하세요"
+        description="선택한 검사와 문헌을 바탕으로 질문하세요. 답변의 출처도 함께 확인할 수 있습니다."
+      />
+      <StudySelect studies={studies} selected={selected} onChange={select} />
+      {selected && !selected.analysis && (
+        <div className="flow-notice">
+          <div>
+            <strong>
+              {jobs[selected.id]?.status === "running"
+                ? "이 검사는 분석 중입니다"
+                : "아직 이 영상의 분석 결과가 없습니다"}
+            </strong>
+            <p>
+              지금 질문하면 일반 문헌을 바탕으로 답합니다. 영상의 소견은 분석
+              완료 후 질문해 주세요.
+            </p>
+          </div>
+          <Link className="btn-secondary" href="/analysis">
+            분석 화면 →
+          </Link>
+        </div>
+      )}
+      <Chat
+        key={`${selected?.id ?? "general"}:${selected?.analysis?.completed_at ?? "pending"}`}
+      />
+    </div>
+  );
+}
+function Chat() {
+  const { selected } = useWorkspace();
+  const { conversations, save } = useConversations();
+  const conversationKey = `${selected?.id ?? "general"}:${selected?.analysis?.completed_at ?? "pending"}`;
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () => conversations[conversationKey] ?? [],
+  );
+  const scroll = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const [query, setQuery] = useSessionValue(`question:${conversationKey}`, "");
+  const [sources, setSources] = useState<Source[]>(
+    () =>
+      conversations[conversationKey]
+        ?.filter((m) => m.role === "assistant")
+        .at(-1)?.sources ?? [],
+  );
+  const [status, setStatus] = useState("");
+  const [metrics, setMetrics] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, lastText, live?.steps?.length]);
-
-  async function send(text: string) {
-    if (streaming) return;
-    /* a follow-up prefixed "문헌 검색:" carries the question over to the
-       literature screen, which runs it through the retrieval pipeline */
-    const lit = /^문헌 검색\s*[:：]\s*(.+)$/.exec(text);
-    if (lit) {
-      actions.setLiterature(c.id, lit[1].trim());
-      router.push("/literature");
+    if (follow.current && scroll.current)
+      scroll.current.scrollTop = scroll.current.scrollHeight;
+  }, [messages, status]);
+  async function send(event?: FormEvent, suggested?: string) {
+    event?.preventDefault();
+    const question = (suggested ?? query).trim();
+    if (busy || question.length < 2) return;
+    if (question.length > 3000) {
+      setError("질문을 3,000자 이내로 줄여 주세요. 작성한 내용은 유지됩니다.");
       return;
     }
-    const time = now();
-    const userMsg: ChatMsg = { role: "user", text, time };
-    let agent: AgentMsg = { role: "agent", time, steps: [], blocks: [], streaming: true };
-    setPendingUser(userMsg);
-    setLive(agent);
-
+    follow.current = true;
+    setQuery("");
+    setBusy(true);
+    setError("");
+    setMetrics("");
+    setStatus("질문을 확인하고 있습니다");
+    setSources([]);
     const ac = new AbortController();
-    abortRef.current = ac;
-
-    const patch = (p: Partial<AgentMsg>) => {
-      agent = { ...agent, ...p };
-      setLive(agent);
-    };
-
+    controller.current = ac;
+    const next: ChatMessage[] = [
+      ...messages,
+      { role: "user", content: question },
+      { role: "assistant", content: "" },
+    ];
+    setMessages(next);
+    let answer = "";
+    let answerSources: Source[] = [];
     try {
-      for await (const ev of streamAgent(text, c.id, ac.signal)) {
-        switch (ev.event) {
-          case "plan":
-            patch({ steps: ev.steps.map((s) => ({ name: s.name, tool: s.tool, state: "waiting" as const })) });
-            break;
-          case "tool": {
-            const steps: AgentStep[] = agent.steps!.map((s, i) =>
-              i === ev.index ? { ...s, state: ev.status === "start" ? "active" : "done", detail: ev.detail } : s,
-            );
-            patch({ steps });
-            if (ev.tool) {
-              if (ev.status === "start") setActiveTool(ev.tool);
-              else {
-                setActiveTool(null);
-                actions.bumpTool(ev.tool);
-              }
-            }
-            break;
-          }
-          case "evidence":
-            actions.setLiterature(c.id, ev.query);
-            break;
-          case "verdict":
-            actions.setVerdict(c.id, ev.verdict);
-            break;
-          case "block":
-            patch({ blocks: [...agent.blocks, ev.block] });
-            break;
-          case "token": {
-            const blocks = agent.blocks.slice();
-            const last = blocks[blocks.length - 1];
-            if (last && last.type === "p") blocks[blocks.length - 1] = { ...last, text: last.text + ev.text };
-            patch({ blocks });
-            break;
-          }
-          case "done":
-            patch({ streaming: false, receipt: ev.receipt, followups: ev.followups });
-            actions.setChat(c.id, [...savedRef.current, userMsg, agent]);
-            setPendingUser(null);
-            setLive(null);
-            break;
+      for await (const { event: kind, data } of streamEvents(
+        {
+          case_id: selected?.id ?? null,
+          query: question,
+          history: messages
+            .filter((m) => m.content && !m.incomplete)
+            .slice(-12)
+            .map(({ role, content }) => ({ role, content })),
+        },
+        ac.signal,
+      )) {
+        if (kind === "tool")
+          setStatus(
+            `${({ knowledge_rag: "관련 문헌 검색", case_rag: "유사 증례 확인", literature: "문헌 검색" } as Record<string, string>)[String(data.name)] ?? "근거 확인"} · ${data.status === "start" ? "진행 중" : "완료"}`,
+          );
+        if (kind === "evidence") {
+          answerSources = (data.hits ?? []) as Source[];
+          setSources(answerSources);
+        }
+        if (kind === "verdict")
+          setStatus(
+            `${data.verdict === "CAUTION" ? "검토 필요" : "근거 부족"} · 실제 답변 생성 중`,
+          );
+        if (kind === "token") {
+          answer += String(data.text);
+          setMessages([
+            ...next.slice(0, -1),
+            { role: "assistant", content: answer, sources: answerSources },
+          ]);
+        }
+        if (kind === "done") {
+          setMetrics(
+            `${data.model} · 총 ${Number(data.latency_ms) / 1000}초 · 첫 토큰 ${Number(data.first_token_ms) / 1000}초 · ${data.total_tokens}토큰`,
+          );
+          setStatus("답변 완료 · 출처와 함께 검토해 주세요");
+          save(conversationKey, [
+            ...next.slice(0, -1),
+            { role: "assistant", content: answer, sources: answerSources },
+          ]);
         }
       }
     } catch (e) {
-      if (!(e instanceof Aborted)) throw e;
-      setPendingUser(null);
-      setLive(null);
+      setQuery((current) => current || question);
+      save(conversationKey, [
+        ...next.slice(0, -1),
+        {
+          role: "assistant",
+          content: answer,
+          sources: answerSources,
+          incomplete: true,
+        },
+      ]);
+      setMessages([
+        ...next.slice(0, -1),
+        {
+          role: "assistant",
+          content: answer,
+          sources: answerSources,
+          incomplete: true,
+        },
+      ]);
+      setError(
+        ac.signal.aborted
+          ? "요청을 중지했습니다."
+          : e instanceof Error
+            ? e.message
+            : "응답 실패",
+      );
+      setStatus("");
     } finally {
-      setActiveTool(null);
-      abortRef.current = null;
+      setBusy(false);
     }
   }
-
-  const starters = c.starters ?? (c.findings[0].en === "PNEUMONIA" ? chatStarters : [chatStarters[0], chatStarters[1], chatStarters[2], "다음에 어떤 검사가 필요한가요?"]);
-  const sources = pickLiterature(state.literature[c.id] ?? c.literatureQuery).sources;
-  const studyDate = c.patient.study.split(" · ")[1]?.split(" ")[0] ?? "";
-
+  const suggestions = selected?.analysis
+    ? [
+        ["주요 소견 정리", "이 영상의 주요 소견과 해석의 한계를 정리해줘."],
+        [
+          "근거 문헌 확인",
+          "이 영상에서 관찰된 주요 소견의 관련 문헌 근거를 알려줘.",
+        ],
+        [
+          "불확실한 부분",
+          "현재 분석에서 확실하지 않은 부분과 검토할 점은 무엇이야?",
+        ],
+        [
+          "검토 메모 작성",
+          "현재 분석을 바탕으로 의료진 검토용 요약을 작성해줘.",
+        ],
+      ]
+    : [
+        ["기흉의 영상 소견", "기흉의 흉부 X-ray 소견을 문헌과 함께 설명해줘."],
+        ["흉수의 영상 소견", "흉수의 흉부 X-ray 소견을 문헌과 함께 설명해줘."],
+        ["폐렴의 영상 소견", "폐렴의 영상 소견과 해석의 한계를 설명해줘."],
+        ["폐부종의 영상 소견", "폐부종의 영상 소견을 문헌과 함께 정리해줘."],
+      ];
   return (
-    <div className="mx-auto grid h-[calc(100vh-104px)] min-h-[560px] max-w-[1400px] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
-      {/* ================= chat: fixed shell, messages scroll inside ================= */}
-      <Panel className="anim-rise flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-4 px-5 pb-3 pt-4">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-tight text-ink">진단 에이전트</h2>
-            <p className="mt-1 text-[12px] text-ink-3">영상 · 임상 정보 · 문헌을 근거로 답하는 판독 보조 대화</p>
+    <div className="chat-layout">
+      <section className="chat-panel" aria-label="AI 대화">
+        <div className="chat-panel-head">
+          <span className="assistant-symbol">
+            <IconConsult />
+          </span>
+          <div>
+            <h2>Chest AI 어시스턴트</h2>
+            <p>
+              {selected?.analysis
+                ? "검사 분석 + 문헌 기반 대화"
+                : "일반 문헌 기반 대화"}
+            </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Tag className="mono !text-[11px]">{c.id}</Tag>
-            <Chip level={streaming ? "info" : "ok"} pulse={streaming}>
-              {streaming ? "답변 작성 중" : "근거 연결됨"}
-            </Chip>
-          </div>
+          <span className="status-pill is-complete ml-auto">
+            <span />
+            {busy ? "답변 중" : "질문 가능"}
+          </span>
         </div>
-
-        <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-4">
-          <p className="microlabel text-center">CHEST PA · {studyDate} · CONNECTED</p>
-
-          {messages.length === 0 && (
-            <div className="anim-rise m-auto flex max-w-[520px] flex-col items-center gap-4 py-6 text-center">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-wash text-accent">
-                <IconConsult className="h-5 w-5" />
+        {!messages.length ? (
+          <div className="chat-welcome">
+            <p className="eyebrow">LET’S LOOK CLOSER</p>
+            <h2>어떤 부분을 살펴볼까요?</h2>
+            <p>
+              {selected?.analysis
+                ? "주요 소견을 요약하거나, 판단의 근거와 불확실한 부분을 질문해 보세요."
+                : "먼저 문헌에 관해 질문하거나, 영상을 분석해 검사 기반 대화를 시작하세요."}
+            </p>
+            <div className="suggestion-grid">
+              {suggestions.map(([title, text]) => (
+                <button
+                  className="suggestion"
+                  key={title}
+                  onClick={() => void send(undefined, text)}
+                >
+                  <strong>
+                    {title} <span className="!inline !text-accent">↗</span>
+                  </strong>
+                  <span>{text}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div
+            ref={scroll}
+            className="chat-scroll"
+            onScroll={() => {
+              const el = scroll.current;
+              if (el)
+                follow.current =
+                  el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+            }}
+          >
+            {messages.map((message, i) => (
+              <article key={i} className={`chat-message ${message.role}`}>
+                <p className="message-label">
+                  {message.role === "user" ? (
+                    "나의 질문"
+                  ) : (
+                    <>
+                      <IconConsult className="h-4 w-4" /> Chest AI · 검토용 답변
+                    </>
+                  )}
+                </p>
+                <Answer
+                  text={
+                    message.content ||
+                    (busy
+                      ? "관련 근거를 살펴보고 있습니다…"
+                      : "답변이 완료되지 않았습니다.")
+                  }
+                />
+                {busy && i === messages.length - 1 && (
+                  <span className="caret" aria-hidden="true" />
+                )}
+                {message.incomplete && (
+                  <p className="mt-2 text-xs text-warning">
+                    중단된 답변입니다. 질문을 다시 보내 확인해 주세요.
+                  </p>
+                )}
+                {!!message.sources?.length && (
+                  <Disclosure
+                    title={`이 답변의 출처 ${message.sources.length}건`}
+                  >
+                    <Sources hits={message.sources} />
+                  </Disclosure>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+        {status && (
+          <p role="status" className="chat-progress">
+            {busy ? (
+              <span className="loading-orbit" aria-hidden="true" />
+            ) : (
+              <span aria-hidden="true">✓</span>
+            )}
+            {status}
+          </p>
+        )}
+        <div className="px-6">
+          <ErrorBox message={error} />
+        </div>
+        {busy && (
+          <p className="px-6 pb-3 text-xs text-ink-2">
+            화면을 이동하면 답변 생성을 중지하고, 받은 내용은 중단된 답변으로
+            보관합니다.
+          </p>
+        )}
+        <form onSubmit={send} className="chat-composer">
+          <div className="composer-box">
+            <textarea
+              ref={textarea}
+              aria-label="에이전트 질문"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  !e.shiftKey &&
+                  !e.nativeEvent.isComposing
+                ) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              rows={2}
+              maxLength={3000}
+              placeholder="검사나 문헌에 대해 질문하세요…"
+            />
+            <div className="composer-actions">
+              <span>Enter 전송 · Shift + Enter 줄바꿈</span>
+              {busy ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => controller.current?.abort()}
+                >
+                  ■ 답변 중지
+                </button>
+              ) : (
+                <button
+                  className={buttonClass}
+                  disabled={query.trim().length < 2}
+                >
+                  질문 보내기 ↑
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-ink-3">
+            AI 답변은 검토를 돕는 초안입니다. 진료 결정을 대신하지 않습니다.
+          </p>
+          {metrics && (
+            <Disclosure title="응답 처리 정보">
+              <p className="text-xs text-ink-2">{metrics}</p>
+            </Disclosure>
+          )}
+        </form>
+      </section>
+      <aside className="chat-rail">
+        {selected?.analysis &&
+          Object.keys(conversations).some(
+            (key) =>
+              key.startsWith(`${selected.id}:`) && key !== conversationKey,
+          ) && (
+            <Card title="새 분석 기준의 대화">
+              <p className="text-xs leading-relaxed text-ink-2">
+                이전 대화는 현재 분석에 사용하지 않습니다. 아래에서 기록을
+                확인할 수 있습니다.
+              </p>
+              <Disclosure title="이전 분석의 대화 보기">
+                {Object.entries(conversations)
+                  .filter(
+                    ([key]) =>
+                      key.startsWith(`${selected.id}:`) &&
+                      key !== conversationKey,
+                  )
+                  .map(([key, history]) => (
+                    <div key={key} className="mb-5">
+                      <p className="text-xs font-semibold mb-3">
+                        {key.endsWith(":pending")
+                          ? "분석 전 대화"
+                          : new Date(
+                              key.slice(selected.id.length + 1),
+                            ).toLocaleString("ko-KR")}
+                      </p>
+                      {history.map((message, index) => (
+                        <div
+                          className="rounded-lg bg-surface-2 p-3 mb-2"
+                          key={index}
+                        >
+                          <p className="text-xs font-medium mb-2">
+                            {message.role === "user" ? "질문" : "이전 답변"}
+                            {message.incomplete ? " · 중단됨" : ""}
+                          </p>
+                          <Answer text={message.content || "중단된 응답"} />
+                          {!!message.sources?.length && (
+                            <Disclosure title="이전 답변의 출처">
+                              <Sources hits={message.sources} />
+                            </Disclosure>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+              </Disclosure>
+            </Card>
+          )}
+        <Card title="함께 보고 있는 검사">
+          {selected ? (
+            <>
+              <div className="context-preview">
+                <img src={selected.image_url} alt="선택한 흉부 영상 미리보기" />
+                <div>
+                  <p>{selected.name}</p>
+                  <span
+                    className={`status-pill mt-2 ${selected.analysis ? "is-complete" : ""}`}
+                  >
+                    <span />
+                    {selected.analysis ? "분석 완료" : "분석 대기"}
+                  </span>
+                </div>
+              </div>
+              <p className="rail-summary">
+                {selected.analysis?.report.impression ??
+                  "영상 분석을 먼저 실행하면 이 검사에 대한 소견과 근거를 함께 질문할 수 있습니다."}
+              </p>
+              <Link href="/analysis" className="btn-secondary w-full">
+                {selected.analysis
+                  ? "분석 결과 살펴보기"
+                  : "영상 분석 시작하기"}{" "}
+                →
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="rail-summary">
+                현재 선택한 검사가 없습니다. 영상을 등록하면 검사에 맞춘 질문을
+                시작할 수 있습니다.
+              </p>
+              <Link href="/" className="btn-secondary">
+                영상 업로드 →
+              </Link>
+            </>
+          )}
+        </Card>
+        <Card
+          title={`답변의 근거${sources.length ? ` · ${sources.length}건` : ""}`}
+          sub="답변 속 [번호]와 출처를 대조해 보세요."
+        >
+          {sources.length ? (
+            <Sources hits={sources} />
+          ) : (
+            <div className="rail-placeholder">
+              <span>
+                <IconBook />
               </span>
               <div>
-                <p className="text-[14px] font-semibold text-ink">{c.patient.name}</p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
-                  {c.patient.studyKo}와 임상 정보가 연결되어 있습니다. 질문하면 영상 분석 · 문헌 검색 · 임상 정보를 순서대로 확인하고 근거와 함께 답합니다.
+                <strong>
+                  {busy
+                    ? "관련 문헌을 확인 중입니다"
+                    : "답변과 함께 출처가 모입니다"}
+                </strong>
+                <p className="mt-1">
+                  질문을 보내면 검색된 문헌과 원문을 이곳에서 확인할 수
+                  있습니다.
                 </p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {starters.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => send(s)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3.5 text-[12.5px] font-medium text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
-                  >
-                    <IconConsult className="h-3.5 w-3.5 text-ink-3" />
-                    {s}
-                  </button>
-                ))}
               </div>
             </div>
           )}
-
-          {messages.map((m, i) => (
-            <Message key={i} m={m} onFollowup={send} />
-          ))}
-        </div>
-
-        <div className="px-5 pb-4">
-          <Composer contextLabel={`흉부 PA · ${c.id}`} disabled={streaming} onSend={send} />
-          <Disclaimer className="mt-2 text-center" />
-        </div>
-      </Panel>
-
-      {/* ================= right rail (scrolls independently) ================= */}
-      <div className="hidden min-h-0 flex-col gap-4 overflow-y-auto xl:flex">
-        <Panel className="anim-rise">
-          <PanelHead title="도구 실행 현황" sub="이 대화에서 에이전트가 사용한 도구" />
-          <div className="flex flex-col gap-1 px-3 pb-4">
-            {agentTools.map((t) => {
-              const calls = state.toolCalls[t.name] ?? 0;
-              const running = activeTool === t.name;
-              return (
-                <div
-                  key={t.name}
-                  className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 transition-colors duration-150"
-                  style={running ? { background: "var(--accent-wash)" } : undefined}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium text-ink">{t.name}</p>
-                    <p className="truncate text-[11.5px] text-ink-3">{t.desc}</p>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-2.5">
-                    <span className="mono text-[12px] text-ink-2 tnum">{calls}회</span>
-                    <Chip level={running ? "info" : calls > 0 ? "ok" : "neutral"} pulse={running}>
-                      {running ? "실행 중" : calls > 0 ? "완료" : "대기"}
-                    </Chip>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-
-        <Panel className="anim-rise">
-          <PanelHead title="확신도 점검" sub="답변 신뢰 수준을 함께 표시" />
-          <div className="flex flex-col gap-2 px-5 pb-5">
-            <div className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2.5">
-              <span className="text-[12.5px] text-ink-2">여러 모델 간 합의</span>
-              <span className="mono text-[12.5px] font-semibold text-ink tnum">{verdict ? verdict.agreement.toFixed(2) : "—"}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2.5">
-              <span className="text-[12.5px] text-ink-2">판독자 간 일치도</span>
-              {verdict ? (
-                <span className={`text-[12.5px] font-medium ${verdict.agreement < 0.7 ? "text-warning" : "text-ok"}`}>
-                  {verdict.agreement < 0.7 ? "낮음" : verdict.agreement < 0.8 ? "보통" : "높음"}
-                </span>
-              ) : (
-                <span className="text-[12.5px] text-ink-3">—</span>
-              )}
-            </div>
-            {verdict ? (
-              verdict.overall === "ACCEPT" ? (
-                <Callout level="ok" className="mt-1">
-                  근거가 충분해 답변을 <b className="font-semibold text-ink">확정</b>했습니다. 최종 판단은 판독의가 진행합니다.
-                </Callout>
-              ) : verdict.overall === "CAUTION" ? (
-                <Callout level="warning" className="mt-1">
-                  판독자 간 일치도가 낮은 소견이 포함되어 <b className="font-semibold text-ink">판독의 확인 권고</b>로 전환되었습니다.
-                </Callout>
-              ) : (
-                <Callout level="info" className="mt-1">
-                  일부 도구 결과가 없어 <b className="font-semibold text-ink">추가 근거 필요</b>로 표시했습니다.
-                </Callout>
-              )
-            ) : (
-              <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">질문을 보내면 답변의 근거 강도와 판독자 일치도를 여기에 표시합니다.</p>
-            )}
-          </div>
-        </Panel>
-
-        <Panel className="anim-rise">
-          <PanelHead title="이 대화의 근거" sub="번호는 답변 속 인용과 연결" />
-          <div className="flex flex-col gap-1 px-3 pb-4">
-            {sources.map((s) => (
-              <button
-                key={s.n}
-                type="button"
-                onClick={() => {
-                  actions.setLiterature(c.id, state.literature[c.id] ?? c.literatureQuery);
-                  router.push("/literature");
-                }}
-                className="group flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
-              >
-                <span className="mono mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-accent-wash text-[10.5px] font-semibold text-accent">
-                  {s.n}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-[12.5px] font-medium leading-snug text-ink group-hover:text-accent-strong">{s.title}</span>
-                  <span className="mt-0.5 flex items-center gap-2">
-                    <span className="text-[11px] text-ink-3">{s.grade}</span>
-                    <span className="mono text-[10.5px] text-ink-3 tnum">{s.year}</span>
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </Panel>
-      </div>
+        </Card>
+        <p className="px-2 text-[11px] leading-relaxed text-ink-3">
+          대화는 현재 브라우저 세션에서만 유지됩니다. 새로고침하면 초기화됩니다.
+        </p>
+      </aside>
+    </div>
+  );
+}
+function Answer({ text }: { text: string }) {
+  const inline = (line: string) =>
+    line
+      .split(/(\*\*.*?\*\*)/g)
+      .map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={i}>{part.slice(2, -2)}</strong>
+        ) : (
+          part
+        ),
+      );
+  return (
+    <div className="answer-text">
+      {text.split("\n").map((line, i) =>
+        /^#{1,4}\s/.test(line) ? (
+          <h3 key={i}>{inline(line.replace(/^#{1,4}\s+/, ""))}</h3>
+        ) : /^[-*]\s/.test(line) ? (
+          <ul key={i}>
+            <li>{inline(line.slice(2))}</li>
+          </ul>
+        ) : line.trim() ? (
+          <p key={i}>{inline(line)}</p>
+        ) : null,
+      )}
     </div>
   );
 }

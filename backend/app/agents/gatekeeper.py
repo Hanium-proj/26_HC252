@@ -1,4 +1,4 @@
-"""[담당 A] Gatekeeper - 파이프라인 진입 전 질문 필터링."""
+"""Input gate; evidence availability is also enforced by the actual tool layer."""
 
 from __future__ import annotations
 
@@ -12,11 +12,10 @@ class GateResult:
 
 
 def check(query: str, has_image: bool) -> GateResult:
-    """질문이 이 시스템이 답할 수 있는 범위인지 판정한다.
-
-    차단 대상:
-      - 진단 범위 밖 질문 (처방, 예후 단정, 비의료 질문)
-      - 영상 근거가 필요한데 영상이 없는 경우
-      - 프롬프트 인젝션 시도
-    """
-    raise NotImplementedError("담당 A: Gatekeeper 규칙 구현")
+    if not 2 <= len(query.strip()) <= 6000:
+        return GateResult(False, "질문은 2~6000자여야 합니다")
+    if any(x in query.lower() for x in ("ignore previous instructions", "reveal api key")):
+        return GateResult(False, "시스템 지시 변경이나 비밀 정보 요청은 처리하지 않습니다")
+    if not has_image and any(x in query for x in ("이 영상", "이 사진", "이 엑스레이")):
+        return GateResult(False, "질문에 필요한 영상이 없습니다")
+    return GateResult(True)

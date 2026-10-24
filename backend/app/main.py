@@ -6,19 +6,56 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+import logging
+import time
+import uuid
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import agent, analyze, cases, health, literature
+from app.api.deps import require_api_key
+from app.api.routes import agent, analyze, cases, health, literature, studies
+from app.core.ai import client, limiter
 from app.core.config import get_settings
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    yield
+    if client.cache_info().currsize:
+        await client().close()
+        client.cache_clear()
+    limiter.cache_clear()
+
 
 app = FastAPI(
     title="Chest AI Backend",
     description="흉부 X-ray 진단 지원 - Agent / Vision / RAG / Trust 파이프라인",
     version="0.1.0",
+    lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def observe(request, call_next):
+    request_id = uuid.uuid4().hex[:16]
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed = (time.perf_counter() - started) * 1000
+    response.headers["X-Request-ID"] = request_id
+    response.headers["Server-Timing"] = f"app_headers;dur={elapsed:.1f}"
+    logging.getLogger("chest_ai.requests").info(
+        "request=%s method=%s status=%s headers_ms=%.1f",
+        request_id,
+        request.method,
+        response.status_code,
+        elapsed,
+    )
+    return response
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,7 +66,5 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
-app.include_router(analyze.router)
-app.include_router(literature.router)
-app.include_router(cases.router)
-app.include_router(agent.router)
+for router in (analyze.router, literature.router, cases.router, agent.router, studies.router):
+    app.include_router(router, dependencies=[Depends(require_api_key)])

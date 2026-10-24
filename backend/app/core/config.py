@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     # LLM
     llm_base_url: str = ""
     llm_api_key: str = ""
+    vision_model: str = "gpt-4.1"
+    chat_model: str = "gpt-4.1-mini"
+    data_dir: str = "data/live"
+    max_upload_bytes: int = 15 * 1024 * 1024
+    max_concurrent_ai: int = 2
+    request_timeout: float = 90.0
+    literature_cache_seconds: int = 3600
+    retrieval_min_similarity: float = 0.30
 
     @property
     def origins(self) -> list[str]:

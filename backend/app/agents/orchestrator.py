@@ -1,21 +1,42 @@
-"""[담당 A] Tool Orchestration - QueryPlan 을 실행해 EvidencePacket 을 만든다.
-
-여기가 담당 A 의 출구다. 이 함수의 반환값이 곧 담당 B 의 입력이다.
-"""
+"""Shared EvidencePacket adapter. Live UI uses the richer /analyze contract."""
 
 from __future__ import annotations
 
-from app.schemas.evidence import EvidencePacket
-from app.schemas.query import QueryPlan
+from app.schemas.common import PacketStatus, ToolName, ToolStatus
+from app.schemas.evidence import EvidencePacket, ToolResult
+from app.schemas.query import Plan, QueryInput
+from app.tools.vision import classifier, localizer, quantifier, vqa
 
 
-async def run(plan: QueryPlan, image_ref: str | None) -> EvidencePacket:
-    """plan.tool_order 를 따라 vision tool 을 호출하고 결과를 정규화한다.
-
-    각 도구 결과는 반드시 EvidenceItem 으로 변환해 packet.items 에 넣는다.
-    호출에 실패했거나 조건이 안 맞아 건너뛴 required 근거는
-    packet.missing_evidence 에 claim 이름으로 남긴다. (B 가 NEED_MORE_EVIDENCE 판정에 사용)
-
-    LangGraph 로 갈아끼울 지점도 여기다.
-    """
-    raise NotImplementedError("담당 A: orchestration 구현")
+async def run(plan: Plan, image_ref: str | None, query: str = "") -> EvidencePacket:
+    packet = EvidencePacket(
+        query=QueryInput(question=query, image_path=image_ref),
+        plan=plan,
+        limitations=["Research model outputs are not clinically calibrated."],
+    )
+    tools = {
+        ToolName.CLASSIFIER: classifier.classify,
+        ToolName.LOCALIZER: localizer.localize,
+        ToolName.VQA: vqa.ask,
+        ToolName.QUANTIFIER: quantifier.quantify,
+    }
+    for tool in plan.tool_call_order:
+        try:
+            if tool not in tools or image_ref is None:
+                packet.tool_results.append(
+                    ToolResult(
+                        tool_name=tool,
+                        status=ToolStatus.SKIPPED,
+                        error="Use live retrieval API for literature",
+                    )
+                )
+                packet.status = PacketStatus.PARTIAL
+                continue
+            packet.items.extend(await tools[tool](image_ref, query=query))
+            packet.tool_results.append(ToolResult(tool_name=tool, status=ToolStatus.SUCCESS))
+        except Exception as exc:
+            packet.tool_results.append(
+                ToolResult(tool_name=tool, status=ToolStatus.FAILED, error=type(exc).__name__)
+            )
+            packet.status = PacketStatus.PARTIAL
+    return packet

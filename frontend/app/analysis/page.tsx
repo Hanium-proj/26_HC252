@@ -1,444 +1,401 @@
 "use client";
-
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { PageHeading, Select } from "@/components/controls";
+import { WorkflowLink as Link } from "@/components/workflow";
+import { useEffect, useRef, useState } from "react";
+import { useSessionValue } from "@/lib/live/session";
+import { NextActions } from "@/components/workflow";
+import { useWorkspace } from "@/lib/live/store";
+import type { Study } from "@/lib/live/types";
 import {
-  Panel,
-  PanelHead,
-  Chip,
-  Tag,
-  ProbBar,
-  MicroLabel,
-  PrimaryButton,
-  Callout,
-  ModelStamp,
-  Disclaimer,
-} from "@/components/ui";
-import { Film, ViewerToolbar, PatientStrip, type Overlay, type Preset } from "@/components/film";
-import { Rich } from "@/components/rich";
-import { LocatorGlyph, IconArrowRight, IconPaperclip, IconChevronDown, IconCheck } from "@/components/icons";
-import { analysisSteps, filmCorners, filmView, priorOf, topFinding } from "@/lib/demo/cases";
-import { useDemo, useCurrentCase } from "@/lib/demo/store";
-import { runAnalysis } from "@/lib/demo/api";
-import { Aborted } from "@/lib/demo/delay";
-import { useCountUp, formatBytes } from "@/lib/demo/hooks";
-import type { Level } from "@/lib/data";
-
-type StepState = "waiting" | "active" | "done";
-
+  buttonClass,
+  inputClass,
+  Card,
+  Empty,
+  ErrorBox,
+  Limitations,
+  StudySelect,
+  Viewer,
+} from "@/components/live";
 export default function AnalysisPage() {
-  const { actions } = useDemo();
-  const { c, analyzed, clinical, upload } = useCurrentCase();
-
-  const [steps, setSteps] = useState<StepState[] | null>(null); // non-null while running
-  const [revealKey, setRevealKey] = useState(0); // bump to replay result animations
-  const [addingSymptom, setAddingSymptom] = useState(false);
-  const [overlay, setOverlay] = useState<Overlay>("끄기");
-  const [opacity, setOpacity] = useState(0.4);
-  const [preset, setPreset] = useState<Preset>("폐");
-  const [zoom, setZoom] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const running = steps !== null;
-  const corner = filmCorners(c);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
-
-  async function start() {
-    if (running) return;
-    setSteps(analysisSteps.map(() => "waiting"));
-    const ac = new AbortController();
-    abortRef.current = ac;
+  const { studies, selected, select, error, loading } = useWorkspace();
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-5">
+      <PageHeading
+        eyebrow="IMAGE ANALYSIS"
+        title="영상에서 소견으로"
+        description="흉부 영상을 분석하고, 주요 소견과 모델이 참고한 영역을 검토하세요."
+      />
+      <StudySelect studies={studies} selected={selected} onChange={select} />
+      <ErrorBox message={error} />
+      {selected ? (
+        <AnalysisForm key={selected.id} study={selected} />
+      ) : (
+        <Empty>
+          <Link className="text-accent" href="/">
+            {loading
+              ? "검사 목록을 불러오는 중…"
+              : "대시보드에서 영상을 업로드해 주세요 →"}
+          </Link>
+        </Empty>
+      )}
+    </div>
+  );
+}
+function AnalysisForm({ study }: { study: Study }) {
+  const { studies, jobs, runAnalysis } = useWorkspace();
+  const [draft, setDraft] = useSessionValue<Study["clinical"]>(
+    `clinical:${study.id}`,
+    study.clinical,
+  );
+  const note = draft.note,
+    patientRef = draft.patient_ref ?? "",
+    priorId = draft.prior_id ?? "";
+  const setNote = (note: string) => setDraft((prev) => ({ ...prev, note }));
+  const setPatientRef = (patient_ref: string) =>
+    setDraft((prev) => ({ ...prev, patient_ref }));
+  const setPriorId = (prior_id: string) =>
+    setDraft((prev) => ({ ...prev, prior_id: prior_id || null }));
+  const busy = jobs[study.id]?.status === "running";
+  const operation = jobs[study.id]?.analyze === false ? "저장" : "분석";
+  const [elapsed, setElapsed] = useState(0);
+  const saved = study.clinical;
+  const analysis = study.analysis;
+  const [notice, setNotice] = useState("");
+  const [reveal, setReveal] = useState(0);
+  const resultsRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!busy) return;
+    const started = jobs[study.id]?.started ?? Date.now();
+    const timer = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [busy, jobs, study.id]);
+  useEffect(() => {
+    if (!reveal || busy) return;
+    resultsRef.current?.focus({ preventScroll: true });
+    resultsRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+      block: "start",
+    });
+  }, [reveal, busy]);
+  const [error, setError] = useState(
+    jobs[study.id]?.status === "error" ? jobs[study.id].message : "",
+  );
+  const dirty =
+    note !== saved.note ||
+    priorId !== (saved.prior_id ?? "") ||
+    patientRef !== (saved.patient_ref ?? "");
+  const result = !dirty && !busy ? analysis : null;
+  async function run(analyze = true) {
+    if (busy) return;
+    setElapsed(0);
+    setNotice("");
+    setError("");
+    const clinical = {
+      note,
+      prior_id: priorId || null,
+      patient_ref: patientRef.trim(),
+    };
     try {
-      for await (const ev of runAnalysis(c.id, ac.signal)) {
-        if (ev.event === "step") {
-          setSteps((s) => s && s.map((st, i) => (i === ev.index ? (ev.status === "start" ? "active" : "done") : st)));
-        } else {
-          actions.setAnalyzed(c.id, true);
-          setRevealKey((k) => k + 1);
-          setSteps(null);
-        }
-      }
+      await runAnalysis(study, clinical, analyze);
+      setDraft(clinical);
+      setNotice(
+        analyze
+          ? "분석이 완료되었습니다. 아래 결과와 영상 근거를 확인하세요."
+          : "임상 정보를 저장했습니다. 분석 실행 시 결과가 생성됩니다.",
+      );
+      if (analyze) setReveal((value) => value + 1);
     } catch (e) {
-      if (!(e instanceof Aborted)) throw e;
-      setSteps(null);
+      setError(e instanceof Error ? e.message : "분석 실패");
     }
   }
-
-  function onFile(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    /* real radiographs render straight from memory; a .dcm is accepted by
-       name only (the browser cannot decode DICOM) and keeps the sample film */
-    const url = f.type.startsWith("image/") ? URL.createObjectURL(f) : "/xray/pa.png";
-    actions.setUpload(c.id, { url, name: f.name, size: formatBytes(f.size) });
-    actions.setAnalyzed(c.id, false);
-    e.target.value = "";
+  function download() {
+    const blob = new Blob([JSON.stringify(analysis, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${study.id}-analysis.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
-
-  function removeSymptom(s: string) {
-    actions.setClinical(c.id, { symptoms: clinical.symptoms.filter((x) => x !== s) });
-  }
-
-  function addSymptom(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Escape") return setAddingSymptom(false);
-    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
-    const v = e.currentTarget.value.trim();
-    if (v && !clinical.symptoms.includes(v)) actions.setClinical(c.id, { symptoms: [...clinical.symptoms, v] });
-    e.currentTarget.value = "";
-    setAddingSymptom(false);
-  }
-
-  const img = c.images;
-  const paSrc = upload?.url ?? img?.pa ?? "/xray/pa.png";
-  /* real model heatmap only applies to the study it was computed on */
-  const realHeat = analyzed && !upload && img?.gradcam ? img.gradcam : null;
-  const fileName = upload?.name ?? c.patient.file.name;
-  const fileSize = upload?.size ?? c.patient.file.size;
-  const stale = !analyzed && !running;
-  /* viewer overlay shows the top finding's regions once results exist */
-  const regions = analyzed ? c.regions[topFinding(c).en] ?? [] : [];
-  const viewer = { preset, zoom };
-  const prior = priorOf(c);
-  const viewLabel = filmView(c).toUpperCase();
-
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-4">
-      {/* ---- input row: viewer + clinical info ---- */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,400px)]">
-        <Panel className="anim-rise flex flex-col overflow-hidden">
-          <PatientStrip name={c.patient.name} meta={`${c.id} · ${c.patient.accession}`} right={<Tag>{c.patient.view}{prior ? " + 비교 1건" : " · 첫 촬영"}</Tag>} />
-          <ViewerToolbar
-            overlay={overlay}
-            onOverlay={setOverlay}
-            opacity={opacity}
-            onOpacity={setOpacity}
-            preset={preset}
-            onPreset={setPreset}
-            zoom={zoom}
-            onZoom={setZoom}
-          />
-          <div className="grid flex-1 grid-cols-2 gap-2 bg-letterbox p-2">
-            <Film
-              key={paSrc}
-              src={paSrc}
-              label={filmView(c).toUpperCase()}
-              meta={upload ? "업로드 · 방금" : overlay !== "끄기" ? `AI 감지 ${regions.length}건` : "0.4s · 109 kVp"}
-              ratio="4 / 5"
-              corner={corner}
-              view={filmView(c)}
-              outline={overlay !== "끄기" && regions.length > 0}
-              variant={overlay === "히트맵" && regions.length > 0 ? "gradcam" : "plain"}
-              heatSrc={overlay === "히트맵" && realHeat ? realHeat : undefined}
-              regions={regions}
-              overlayOpacity={Math.min(1, opacity * 2)}
-              swatch={overlay === "히트맵" && regions.length > 0 ? "jet" : undefined}
-              {...viewer}
-            />
-            {prior ? (
-              <Film src={prior.src} label={`PRIOR ${viewLabel}`} meta={`${prior.date} · 비교`} corners={false} ratio="4 / 5" priorLook={prior.sameStudy} {...viewer} />
-            ) : img?.mask && !upload ? (
-              <Film
-                src={img.pa}
-                maskSrc={analyzed ? img.mask : undefined}
-                label="LUNG FIELD"
-                meta={analyzed ? "폐 분할 적용 · 품질 확인" : "분석 후 폐 분할 표시"}
-                corners={false}
-                ratio="4 / 5"
-                {...viewer}
-              />
-            ) : (
-              <figure className="flex flex-col overflow-hidden rounded-lg bg-letterbox">
-                <div className="flex w-full items-center justify-center bg-film" style={{ aspectRatio: "4 / 5" }}>
-                  <span className="microlabel !text-[#7c848d]">NO PRIOR STUDY</span>
-                </div>
-                <figcaption className="flex h-8 items-center px-3">
-                  <span className="microlabel !text-[#aeb6bf]">PRIOR</span>
-                  <span className="mono ml-auto text-[10.5px] tracking-wide text-[#7c848d]">이전 촬영 없음 · 첫 방문</span>
-                </figcaption>
-              </figure>
-            )}
+    <>
+      <div
+        role="status"
+        aria-live="polite"
+        className={`analysis-status ${error ? "!border-red-200 !bg-red-50" : ""}`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 font-semibold">
+              {busy && (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-teal-700 border-t-transparent motion-reduce:animate-none"
+                />
+              )}
+              {busy
+                ? `${operation} 중 · ${elapsed}초 경과`
+                : error
+                  ? "처리 실패 · 다시 시도해 주세요"
+                  : result
+                    ? "✓ 분석 완료"
+                    : dirty
+                      ? "입력 변경 · 재분석 필요"
+                      : "분석 대기"}
+            </p>
+            <p className="mt-1 text-sm text-ink-2">
+              {busy
+                ? "완료되면 결과로 자동 이동합니다. 다른 메뉴로 이동해도 분석은 계속됩니다."
+                : error ||
+                  notice ||
+                  (result
+                    ? `${new Date(result.completed_at).toLocaleString("ko-KR")} · 처리 ${(result.latency_ms / 1000).toFixed(1)}초`
+                    : "임상 정보는 선택 사항입니다. 분석 실행 버튼을 눌러 시작하세요.")}
+            </p>
           </div>
-        </Panel>
-
-        <Panel className="anim-rise flex flex-col">
-          <PanelHead title="임상 정보" sub="영상과 함께 분석에 반영되는 입력" action={<Chip level="ok">기록 연동됨</Chip>} />
-          <div className="flex flex-1 flex-col gap-4 px-5 pb-5">
-            <div className="grid grid-cols-2 gap-x-3 gap-y-3.5">
-              <Field label="환자 ID" value={c.id} mono />
-              <Field label="나이 · 성별" value={c.patient.ageSex} />
-              <Field label="체온" value={`${c.patient.temp.toFixed(1)} ℃`} mono warn={c.patient.temp >= 37.5} />
-              <Field label="산소포화도" value={`${c.patient.spo2} %`} mono warn={c.patient.spo2 < 96} />
-              <Field label="혈압" value={c.patient.bp} mono />
-              <Field label="흡연력" value={c.patient.smoking} select />
-            </div>
-
-            <div>
-              <FieldLabel>주요 증상</FieldLabel>
-              <div className="flex flex-wrap gap-1.5">
-                {clinical.symptoms.map((s) => (
-                  <span key={s} className="anim-rise inline-flex h-7 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium text-ink">
-                    {s}
-                    <button type="button" onClick={() => removeSymptom(s)} aria-label={`${s} 삭제`} className="text-ink-3 transition-colors hover:text-ink">
-                      ×
-                    </button>
-                  </span>
-                ))}
-                {addingSymptom ? (
-                  <input
-                    autoFocus
-                    onKeyDown={addSymptom}
-                    onBlur={() => setAddingSymptom(false)}
-                    placeholder="증상 입력 후 Enter"
-                    className="h-7 w-36 rounded-full bg-surface-2 px-3 text-[12.5px] text-ink outline-none placeholder:text-ink-3"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setAddingSymptom(true)}
-                    className="inline-flex h-7 items-center rounded-full border border-dashed border-line px-3 text-[12.5px] font-medium text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2"
-                  >
-                    + 추가
-                  </button>
-                )}
+          {result && (
+            <button
+              className={buttonClass}
+              onClick={() => setReveal((value) => value + 1)}
+            >
+              결과 보기 ↓
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
+        <Card title="01 · 입력 영상" sub={`${study.name} · 실제 업로드 영상`}>
+          <Viewer study={study} />
+        </Card>
+        <Card
+          title="02 · 분석 조건"
+          sub="입력한 정보만 분석에 사용합니다. 없는 수치나 환자 정보는 추정하지 않습니다."
+        >
+          <div className="space-y-4">
+            <label className="block text-sm font-medium">
+              익명 환자 식별자 (비교 시 필수)
+              <input
+                aria-label="익명 환자 식별자"
+                value={patientRef}
+                disabled={busy}
+                maxLength={80}
+                onChange={(e) => {
+                  setPatientRef(e.target.value);
+                  setPriorId("");
+                }}
+                className={`${inputClass} mt-2`}
+                placeholder="같은 환자의 검사에 동일한 익명 식별자를 입력"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              증상 · 활력징후 · 임상 메모
+              <textarea
+                aria-label="임상 메모"
+                disabled={busy}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={5}
+                maxLength={6000}
+                className={`${inputClass} mt-2 resize-y`}
+                placeholder="임상 정보를 입력해 주세요 (선택)"
+              />
+            </label>
+            <div className="block text-sm font-medium">
+              비교할 이전 영상
+              <div className="mt-2">
+                <Select
+                  label="비교할 이전 영상"
+                  disabled={busy}
+                  value={priorId}
+                  onChange={setPriorId}
+                  options={[
+                    { value: "", label: "비교 없이 현재 영상만 분석" },
+                    ...studies
+                      .filter(
+                        (s) =>
+                          s.id !== study.id &&
+                          patientRef.trim() &&
+                          s.clinical.patient_ref === patientRef.trim(),
+                      )
+                      .map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
               </div>
             </div>
-
-            <div>
-              <FieldLabel>임상 메모</FieldLabel>
-              <textarea
-                value={clinical.note}
-                onChange={(e) => actions.setClinical(c.id, { note: e.target.value })}
-                rows={3}
-                className="min-h-[64px] w-full resize-none rounded-md bg-surface-2 px-3 py-2.5 text-[13px] leading-relaxed text-ink-2 outline-none transition-shadow focus:shadow-e2 focus:text-ink"
-              />
-            </div>
-
+            <p className="text-xs leading-relaxed text-ink-2">
+              {!patientRef.trim()
+                ? "이전 영상과 비교하려면 두 검사에 동일한 익명 환자 식별자를 저장하세요."
+                : !studies.some(
+                      (s) =>
+                        s.id !== study.id &&
+                        s.clinical.patient_ref === patientRef.trim(),
+                    )
+                  ? "동일한 환자 식별자로 저장된 이전 검사가 없습니다. 이전 영상을 등록하고 같은 식별자를 저장하면 선택할 수 있습니다."
+                  : "같은 환자 식별자로 저장된 검사만 비교 목록에 표시됩니다."}
+            </p>
+            <p className="text-xs leading-relaxed text-ink-3">
+              영상·메모를 OpenAI에 전송해 설명을 생성합니다. 분류·CAM은 로컬
+              연구 모델로 계산합니다. 이전 영상은 직접 선택한 경우에만
+              비교합니다.
+            </p>
+            <button
+              className={`${buttonClass} w-full`}
+              disabled={busy}
+              onClick={() => run()}
+            >
+              {busy
+                ? `${operation} 중… ${elapsed}초`
+                : error
+                  ? "다시 시도"
+                  : result
+                    ? "다시 분석"
+                    : "실제 분석 실행"}
+            </button>
             <button
               type="button"
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center justify-between rounded-md border border-dashed border-line px-3 py-2.5 text-left transition-colors hover:border-line-strong hover:bg-surface-2"
+              disabled={busy || !dirty}
+              className="text-sm text-accent disabled:opacity-40"
+              onClick={() => run(false)}
             >
-              <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-ink-2">
-                <IconPaperclip className="h-4 w-4 shrink-0 text-ink-3" />
-                <span className="mono truncate">{fileName}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <span className="mono text-[11px] text-ink-3">{fileSize}</span>
-                <span className="text-[11.5px] font-medium text-accent">교체</span>
-              </span>
+              임상 정보만 저장
             </button>
-            <input ref={fileRef} type="file" accept="image/*,.dcm" onChange={onFile} className="hidden" />
-
-            <PrimaryButton className="mt-auto w-full" onClick={start} disabled={running}>
-              {running ? (
-                <>
-                  <span className="pulse-dot h-2 w-2 rounded-full bg-accent-ink" />
-                  분석 중
-                </>
-              ) : (
-                <>
-                  {analyzed ? "멀티모달 분석 다시 실행" : "멀티모달 분석 실행"}
-                  <IconArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </PrimaryButton>
+            <ErrorBox message={error} />
+            {dirty && (
+              <div className="draft-notice">
+                <p>
+                  수정 초안은 메뉴 이동 시 유지됩니다. 새로고침 전에는 저장해
+                  주세요.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="text-accent text-xs"
+                  onClick={() => setDraft(study.clinical)}
+                >
+                  수정 취소 · 저장값으로 복원
+                </button>
+              </div>
+            )}
+            {dirty && (
+              <p className="text-xs text-warning">
+                입력이 변경되어 이전 결과를 숨겼습니다. 다시 분석해 주세요.
+              </p>
+            )}
           </div>
-        </Panel>
+        </Card>
       </div>
-
-      {/* ---- results row ---- */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] xl:grid-cols-[minmax(260px,300px)_minmax(0,1.35fr)_minmax(300px,1fr)]">
-        <ScorePanel score={c.abnormalityScore} ready={analyzed && !running} running={running} revealKey={revealKey} />
-
-        <Panel className="anim-rise">
-          <PanelHead
-            title="소견별 확률"
-            sub="14개 소견 동시 평가 · 상위 8개 표시"
-            action={<Tag>{c.patient.view === "PA" ? "정면" : "정면 + 측면"} + 임상 정보</Tag>}
-          />
-          <div className="px-5 pb-5">
-            {running && steps ? (
-              <Progress steps={steps} />
-            ) : analyzed ? (
-              <div key={revealKey} className="flex flex-col gap-[15px]">
-                {c.findings.map((f, i) => (
-                  <div key={f.en} className="anim-rise" style={{ animationDelay: `${i * 50}ms` }}>
-                    <div className="mb-1.5 flex items-center gap-2.5">
-                      <LocatorGlyph loc={f.loc} className="h-5 w-5 shrink-0 text-ink-3" tone="var(--ink-2)" />
-                      <span className="min-w-0 truncate text-[13px] font-medium text-ink">{f.ko}</span>
-                      <span className="microlabel hidden sm:inline">{f.en}</span>
-                      <span className="ml-auto flex items-center gap-2.5">
-                        <span className="hidden text-[11.5px] text-ink-3 2xl:inline">{f.note}</span>
-                        <span className="mono w-10 text-right text-[13px] font-semibold text-ink tnum">{Math.round(f.prob * 100)}%</span>
-                      </span>
+      {result ? (
+        <section
+          ref={resultsRef}
+          tabIndex={-1}
+          aria-label="분석 결과"
+          className="scroll-mt-64 lg:scroll-mt-44 space-y-5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+        >
+          <Card
+            title="분석 완료 · 주요 소견"
+            sub="AI가 생성한 검토용 초안입니다. 의료진의 확인이 필요합니다."
+          >
+            <p className="whitespace-pre-wrap leading-relaxed">
+              {result.report.impression}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/evidence" className={buttonClass}>
+                영상 근거 확인 →
+              </Link>
+              <Link href="/agent" className={buttonClass}>
+                AI에게 결과 질문 →
+              </Link>
+            </div>
+          </Card>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Card
+              title="분류 모델 출력"
+              sub={`${result.classifier.model} · ${result.classifier.findings.length}개 소견 · 보정되지 않은 점수`}
+            >
+              <div className="space-y-3">
+                {result.classifier.findings.map((f) => (
+                  <div key={f.name}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span>{f.name}</span>
+                      <span className="font-mono">{f.score.toFixed(3)}</span>
                     </div>
-                    <ProbBar value={f.prob} threshold={f.threshold} level={f.level} delay={i * 50} />
+                    <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className="h-full rounded-full bg-accent-fill"
+                        style={{ width: `${f.score * 100}%` }}
+                      />
+                    </div>
                   </div>
                 ))}
-                <p className="text-[11px] text-ink-3">세로선 = 소견별 운영 임계값. 임계값 미만 소견은 회색으로 표시됩니다.</p>
               </div>
-            ) : (
-              <Empty
-                title={upload ? "영상이 교체되었습니다" : "아직 분석하지 않은 검사입니다"}
-                sub="멀티모달 분석 실행을 누르면 영상과 임상 정보를 함께 평가해 소견별 확률을 표시합니다."
-              />
-            )}
-          </div>
-        </Panel>
-
-        <Panel className="anim-rise flex flex-col">
-          <PanelHead title="AI 판독 요약" sub="구조화 소견 초안 · 판독의 검토용" />
-          <div className="flex flex-1 flex-col gap-3.5 px-5 pb-5">
-            {running ? (
-              <SkeletonLines />
-            ) : analyzed ? (
-              <div key={revealKey} className="anim-rise flex flex-1 flex-col gap-3.5">
-                <p className="text-[13px] leading-relaxed text-ink-2">
-                  <Rich text={c.summary.lead} />
-                </p>
-                <div className="flex flex-col gap-2">
-                  {c.summary.rows.map((r, i) => (
-                    <div
-                      key={r.k}
-                      className="anim-rise flex items-center justify-between gap-3 rounded-md bg-surface-2 px-3 py-2.5"
-                      style={{ animationDelay: `${120 + i * 60}ms` }}
-                    >
-                      <span className="flex items-center gap-2 text-[12.5px] font-medium text-ink">
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: `var(--${r.tone === "neutral" ? "ink-3" : `${r.tone}-fill`})` }} />
-                        {r.k}
-                      </span>
-                      <span className="text-[11.5px] text-ink-3">{r.note}</span>
-                    </div>
-                  ))}
-                </div>
-                <Callout level={c.summary.calloutLevel}>{c.summary.callout}</Callout>
-              </div>
-            ) : (
-              <Empty title="요약 대기" sub={stale ? "분석 후 소견 초안이 작성됩니다." : ""} />
-            )}
-            <div className="mt-auto flex items-end justify-between gap-3 pt-1">
-              <Disclaimer />
-              <ModelStamp />
-            </div>
-          </div>
-        </Panel>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- pieces ---------- */
-
-function ScorePanel({ score, ready, running, revealKey }: { score: number; ready: boolean; running: boolean; revealKey: number }) {
-  const shown = useCountUp(ready ? score : 0, revealKey);
-  const level: Level = score >= 75 ? "critical" : score >= 50 ? "warning" : "ok";
-  const label = score >= 50 ? "ABNORMAL" : "WITHIN RANGE";
-  return (
-    <Panel className="anim-rise flex flex-col px-5 py-4">
-      <MicroLabel>ABNORMALITY SCORE</MicroLabel>
-      <div className="mt-4 flex items-center gap-3">
-        <span className="mono text-[44px] font-bold leading-none tracking-tight text-ink tnum">{ready ? shown : "—"}</span>
-        <span className="flex flex-col gap-1">
-          <span className="flex items-center gap-1.5">
-            <span className={`h-2.5 w-2.5 rounded-full ${running ? "pulse-dot" : ""}`} style={{ background: ready ? `var(--${level}-fill)` : "var(--ink-3)" }} />
-            <MicroLabel className="!text-ink-2">{running ? "ANALYZING" : ready ? label : "PENDING"}</MicroLabel>
-          </span>
-          <span className="text-[11px] text-ink-3">{ready ? (score >= 50 ? "임계값 50 초과" : "임계값 50 미만") : "임계값 50"}</span>
-        </span>
-      </div>
-      <div className="mt-4">
-        {ready ? <ProbBar key={revealKey} value={score / 100} threshold={0.5} level={level} /> : <div className="h-1 w-full rounded-sm bg-hairline" />}
-      </div>
-      <p className="mt-4 text-[12px] leading-relaxed text-ink-2">
-        {ready ? (
-          score >= 50 ? (
-            <>
-              14개 소견을 종합한 이상 소견 지표입니다. 임계값을 초과해 <b className="font-semibold text-ink">판독의 확인</b>이 필요합니다.
-            </>
-          ) : (
-            <>
-              14개 소견을 종합한 이상 소견 지표입니다. 임계값 미만이며 <b className="font-semibold text-ink">판독의 확인</b> 후 종료할 수 있습니다.
-            </>
-          )
-        ) : (
-          "14개 소견을 종합한 이상 소견 지표입니다. 분석 후 표시됩니다."
-        )}
-      </p>
-      <ModelStamp className="mt-auto pt-4" />
-    </Panel>
-  );
-}
-
-function Progress({ steps }: { steps: StepState[] }) {
-  return (
-    <div className="flex flex-col gap-3 py-2">
-      {analysisSteps.map((s, i) => {
-        const st = steps[i];
-        return (
-          <div key={s.name} className="flex items-center gap-3">
-            {st === "done" ? (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-ok-wash text-ok">
-                <IconCheck className="h-3 w-3" />
-              </span>
-            ) : st === "active" ? (
-              <span className="flex h-5 w-5 items-center justify-center">
-                <span className="pulse-dot h-2.5 w-2.5 rounded-full bg-accent-fill" />
-              </span>
-            ) : (
-              <span className="flex h-5 w-5 items-center justify-center">
-                <span className="h-2.5 w-2.5 rounded-full border border-line-strong" />
-              </span>
-            )}
-            <div className="min-w-0">
-              <p className={st === "active" ? "shimmer-text text-[13px] font-medium" : st === "done" ? "text-[13px] font-medium text-ink" : "text-[13px] text-ink-3"}>
-                {s.name}
-                {st === "active" && "…"}
+            </Card>
+            <Card
+              title="영상 설명 · 검토용 초안"
+              sub={`${result.vision_model} · ${result.report.view} · 영상 품질 ${result.report.quality}`}
+            >
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-2">
+                {result.report.impression}
               </p>
-              <p className="text-[11.5px] text-ink-3">{s.detail}</p>
-            </div>
+              <div className="mt-5 space-y-3">
+                {result.report.observations.map((o, i) => (
+                  <div
+                    key={`${o.finding}-${i}`}
+                    className="rounded-lg bg-surface-2 p-3"
+                  >
+                    <p className="text-sm font-medium">
+                      {o.finding} · {o.location}
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-ink-2">
+                      {o.description}
+                    </p>
+                    <p className="mt-1 text-xs text-ink-3">
+                      관찰 상태: {o.certainty}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {result.report.comparison && (
+                <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed">
+                  비교: {result.report.comparison}
+                </p>
+              )}
+              <div className="mt-5 flex gap-4">
+                <Link
+                  href="/evidence"
+                  className="text-sm font-medium text-accent"
+                >
+                  실제 CAM 확인 →
+                </Link>
+                <button className="text-sm text-accent" onClick={download}>
+                  분석 JSON 저장
+                </button>
+              </div>
+            </Card>
           </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SkeletonLines() {
-  return (
-    <div className="flex flex-col gap-2.5 py-1" aria-hidden="true">
-      {[100, 92, 76].map((w, i) => (
-        <span key={i} className="pulse-dot block h-3 rounded-sm bg-surface-2" style={{ width: `${w}%`, animationDelay: `${i * 120}ms` }} />
-      ))}
-      <p className="shimmer-text mt-2 text-[12.5px] font-medium">소견 초안 작성 중…</p>
-    </div>
-  );
-}
-
-function Empty({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="flex flex-col items-start gap-1 rounded-md bg-surface-2 px-3.5 py-3">
-      <p className="text-[12.5px] font-medium text-ink">{title}</p>
-      {sub && <p className="text-[11.5px] leading-relaxed text-ink-3">{sub}</p>}
-    </div>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <p className="mb-1.5 text-[11.5px] font-medium text-ink-3">{children}</p>;
-}
-
-function Field({ label, value, mono, select, warn }: { label: string; value: string; mono?: boolean; select?: boolean; warn?: boolean }) {
-  return (
-    <div>
-      <FieldLabel>{label}</FieldLabel>
-      <div
-        className={`flex h-9 items-center justify-between rounded-md bg-surface-2 px-3 text-[13px] font-medium tnum ${mono ? "mono" : ""}`}
-        style={{ color: warn ? "var(--warning-text)" : "var(--ink)" }}
-      >
-        {value}
-        {select && <IconChevronDown className="h-3.5 w-3.5 text-ink-3" />}
-      </div>
-    </div>
+          <NextActions />
+          <Card
+            title="처리 정보와 한계"
+            sub={`전체 ${(result.latency_ms / 1000).toFixed(2)}초 · 로컬 모델 ${(result.classifier.latency_ms / 1000).toFixed(2)}초 · ${new Date(result.completed_at).toLocaleString("ko-KR")}`}
+          >
+            <Limitations
+              items={[...result.limitations, ...result.report.quality_issues]}
+            />
+          </Card>
+        </section>
+      ) : (
+        !busy && (
+          <Empty>
+            실제 분석을 실행하면 모델 점수와 영상 설명이 표시됩니다.
+          </Empty>
+        )
+      )}
+    </>
   );
 }

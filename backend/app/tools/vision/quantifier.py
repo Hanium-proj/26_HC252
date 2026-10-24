@@ -1,14 +1,27 @@
-"""[담당 A] 정량화."""
+"""Quantifies CAM activation fraction only, never physical lesion dimensions."""
 
 from __future__ import annotations
 
+from app.schemas.common import EvidenceType, ToolName
 from app.schemas.evidence import EvidenceItem
+from app.tools.vision.classifier import output
 
 
 async def quantify(image_ref: str, **kwargs) -> list[EvidenceItem]:
-    """병변 크기/비율/심각도를 수치로 산출. result=float.
-
-    반환값은 반드시 EvidenceItem 리스트여야 한다. confidence 와 quality 를
-    빠뜨리면 담당 B 의 Trust 계산이 성립하지 않는다.
-    """
-    raise NotImplementedError("담당 A: 정량화 구현")
+    result = await output(image_ref)
+    return [
+        EvidenceItem(
+            source=ToolName.QUANTIFIER,
+            evidence_type=EvidenceType.MODEL,
+            claim="CAM activation fraction: " + f["name"],
+            confidence=0.0,
+            metadata={
+                "finding": f["name"],
+                "activation_fraction": f["activation_fraction"],
+                "unit": "fraction of model crop",
+                "limitation": "Not a physical lesion measurement",
+            },
+        )
+        for f in result["findings"]
+        if f["activation_fraction"] is not None
+    ]
