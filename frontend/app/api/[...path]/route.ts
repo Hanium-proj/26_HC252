@@ -24,15 +24,21 @@ async function proxy(
       { status: 404 },
     );
   }
-  // Local-only prototype until an authenticated multi-user deployment is configured.
+  // Hosted shared workspace requires Vercel Authentication on every *.vercel.app URL.
+  // Custom domains stay disabled here because the project protection excludes them.
+  const protectedDeployment =
+    process.env.VERCEL === "1" &&
+    process.env.PRIVATE_VERCEL_WORKSPACE === "true" &&
+    new URL(request.url).hostname.endsWith(".vercel.app");
   if (
     process.env.NODE_ENV === "production" &&
-    process.env.ALLOW_LOCAL_WORKSPACE !== "true"
+    process.env.ALLOW_LOCAL_WORKSPACE !== "true" &&
+    !protectedDeployment
   ) {
     return Response.json(
       {
         detail:
-          "서버에서 ALLOW_LOCAL_WORKSPACE=true 설정이 필요합니다. 인증 없는 로컬 작업 공간입니다.",
+          "작업 공간 접근 보호 설정이 필요합니다. 배포 관리자에게 문의해 주세요.",
       },
       { status: 503 },
     );

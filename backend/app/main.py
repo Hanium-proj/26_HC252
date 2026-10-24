@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import require_api_key
-from app.api.routes import agent, analyze, cases, health, literature, replay, studies
+from app.api.routes import agent, analyze, bootstrap, cases, health, literature, replay, studies
 from app.core.ai import client, limiter
 from app.core.config import get_settings
 
@@ -66,6 +66,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(bootstrap.router)
 for router in (
     analyze.router,
     literature.router,
