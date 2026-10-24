@@ -9,13 +9,8 @@ const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     borderRadius: {
-      none: "0",
-      sm: "4px",
-      md: "6px",
-      lg: "8px",
-      xl: "10px",
-      "2xl": "12px",
-      full: "9999px",
+      none: "0", sm: "8px", md: "var(--r-md)", lg: "var(--r-md)",
+      xl: "var(--r-lg)", "2xl": "var(--r-xl)", full: "9999px",
     },
     extend: {
       colors: {

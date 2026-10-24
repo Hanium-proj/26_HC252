@@ -1,3 +1,4 @@
+import localFont from "next/font/local";
 import { Suspense } from "react";
 import { SessionProvider } from "@/lib/live/session";
 import { WorkflowBar } from "@/components/workflow";
@@ -7,6 +8,13 @@ import { ConversationsProvider } from "@/lib/live/conversations";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
 import { WorkspaceProvider } from "@/lib/live/store";
+
+const pretendard = localFont({
+  src: "./fonts/PretendardVariable.woff2",
+  display: "swap",
+  weight: "45 920",
+  variable: "--font-pretendard",
+});
 
 export const metadata: Metadata = {
   title: "Chest AI · 판독실",
@@ -19,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
+    <html lang="ko" className={pretendard.variable}>
       <body>
         <a className="skip-link" href="#main-content">
           본문으로 건너뛰기

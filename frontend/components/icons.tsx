@@ -331,7 +331,7 @@ export const BrandMark = ({ className }: P) => (
   >
     <rect width="28" height="28" rx="7" fill="var(--accent-brand)" />
     <g
-      stroke="#06110F"
+      stroke="var(--accent-ink)"
       strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
