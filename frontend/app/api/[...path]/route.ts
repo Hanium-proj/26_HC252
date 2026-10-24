@@ -24,8 +24,8 @@ async function proxy(
       { status: 404 },
     );
   }
-  // Hosted shared workspace requires Vercel Authentication on every *.vercel.app URL.
-  // Custom domains stay disabled here because the project protection excludes them.
+  // Hosted shared workspace requires Vercel Authentication on every deployment and production URL.
+  // Only the verified Vercel domains are enabled for this shared research deployment.
   const protectedDeployment =
     process.env.VERCEL === "1" &&
     process.env.PRIVATE_VERCEL_WORKSPACE === "true" &&

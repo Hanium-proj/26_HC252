@@ -13,6 +13,8 @@ import {
   buttonClass,
   inputClass,
 } from "@/components/live";
+const maxUploadMb = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB || 15);
+
 export default function Dashboard() {
   const { studies, refresh, loading, error, jobs } = useWorkspace();
   const [uploading, setUploading] = useState(false);
@@ -31,8 +33,8 @@ export default function Dashboard() {
     setUploading(true);
     setUploadError("");
     try {
-      if (selectedFile.size > 15 * 1024 * 1024)
-        throw new Error("영상은 15MB 이하여야 합니다");
+      if (selectedFile.size > maxUploadMb * 1024 * 1024)
+        throw new Error(`영상은 ${maxUploadMb}MB 이하여야 합니다`);
       const body = new FormData();
       body.append("file", selectedFile);
       const study = await api<Study>("/studies", { method: "POST", body });
@@ -124,7 +126,7 @@ export default function Dashboard() {
           </h2>
           <p>
             흉부 영상을 끌어 놓거나 파일을 선택하세요. PNG · JPEG · DICOM, 최대
-            15MB
+            {maxUploadMb}MB
           </p>
         </div>
         <button
@@ -154,7 +156,7 @@ export default function Dashboard() {
       {uploading && <Loading label="영상을 확인하고 저장하고 있습니다" />}
       <Card
         title="검사 워크리스트"
-        sub="업로드한 실제 검사만 표시합니다. PNG·JPEG·단일 프레임 흑백 DICOM, 최대 15MB."
+        sub={`업로드한 실제 검사만 표시합니다. PNG·JPEG·단일 프레임 흑백 DICOM, 최대 ${maxUploadMb}MB.`}
       >
         <input
           aria-label="검사 검색"

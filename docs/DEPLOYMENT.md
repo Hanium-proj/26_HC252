@@ -1,0 +1,22 @@
+# Private research deployment
+
+- Frontend: https://26-hc-252.vercel.app, Vercel project `26-hc-252`.
+- Backend: Railway `hanium-chest-ai` / `chest-api`, `main`, root `/backend`.
+- Volume: `/data` (5 GB); runtime data `/data/live`, models `/data/model-cache`.
+- Single replica; CPU inference; 4 GB RAM / 2 vCPU limits. Shared research workspace, not multi-tenant clinical software.
+
+## Access and secrets
+
+Vercel Authentication must cover **all deployments including production** (`ssoProtection.deploymentType=all`). `all_except_custom_domains` does not protect the production alias sufficiently. Never disable protection while `PRIVATE_VERCEL_WORKSPACE=true`. The proxy accepts the protected hosted mode only on Vercel and `*.vercel.app` domains. Team members sign in with Vercel.
+
+Railway uses `ENVIRONMENT=production`, `API_KEY`, and `OPENAI_API_KEY`. Vercel holds `BACKEND_URL` and sensitive server-only `BACKEND_API_KEY`. Never use a NEXT_PUBLIC variable for credentials. Production upload limit is 4 MB (`NEXT_PUBLIC_MAX_UPLOAD_MB=4`) to fit Vercel multipart requests; local limit is 15 MB.
+
+## Private corpus import
+
+A temporary `DEPLOYMENT_IMPORT_TOKEN` enables backend `PUT /internal/bootstrap/{filename}` with `X-Import-Token` and `X-Content-Sha256`. Only `knowledge-vectors.npz` and `case-reports.sqlite3` are accepted, up to 300 MB each. Files are streamed, checksum-verified, and atomically published without overwriting existing indices. The frontend cannot proxy this endpoint. Set the token empty and redeploy after transfer; verify 404 afterwards.
+
+Raw MIMIC archives are not required at runtime. Keep indices, images, environment files, and migration credentials out of Git and container images. Back up the private volume before destructive operations.
+
+## Verification
+
+Run backend tests/lint and frontend lint/build before release. Verify anonymous frontend requests redirect to login, backend study requests return 401 without a key, authenticated uploads/analysis work, and searches return actual sources. Deployment and throughput checks do not establish diagnostic accuracy.
