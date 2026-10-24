@@ -3,7 +3,7 @@ import { usePathname } from "next/navigation";
 import { WorkflowLink as Link } from "@/components/workflow";
 import { useWorkspace } from "@/lib/live/store";
 export function Topbar() {
-  const { error } = useWorkspace();
+  const { error, selected } = useWorkspace();
   const path = usePathname();
   const title =
     (
@@ -18,12 +18,13 @@ export function Topbar() {
   return (
     <header className="topbar-veil sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-7 py-4">
       <p className="text-sm text-ink-2">
-        Chest AI <span className="mx-2 text-ink-3">/</span>
+        <Link href="/" className="breadcrumb-home">워크스페이스</Link> <span className="mx-2 text-ink-3">/</span>
         {title}
       </p>
-      <span className="text-xs text-ink-3">
-        {error ? "서버 연결 확인 필요" : "RESEARCH · 연구 워크스페이스"}
-      </span>
+      <div className="topbar-context">
+        {selected && <span className="topbar-study" title={selected.name}>{selected.name}</span>}
+        <span className={error ? "connection-label is-error" : "connection-label"}>{error ? "연결 확인 필요" : "연구용"}</span>
+      </div>
       <nav
         aria-label="모바일 메뉴"
         className="flex w-full gap-4 overflow-x-auto text-xs text-accent lg:hidden"

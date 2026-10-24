@@ -320,28 +320,12 @@ export const LocatorGlyph = ({
   </svg>
 );
 
-/* Brand mark: lung glyph in a rounded tile */
+/* An open imaging frame, with the image and its evidence meeting at the center. */
 export const BrandMark = ({ className }: P) => (
-  <svg
-    className={className}
-    width="28"
-    height="28"
-    viewBox="0 0 28 28"
-    fill="none"
-  >
-    <rect width="28" height="28" rx="7" fill="var(--accent-brand)" />
-    <g
-      stroke="var(--accent-ink)"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    >
-      <path d="M14 6.5v4" />
-      <path d="M14 10.5c0 1.3-.9 2-2 2.4" />
-      <path d="M14 10.5c0 1.3.9 2 2 2.4" />
-      <path d="M10.6 13.8c.9-.6 1.3-1.9 1.3-3 0-.5-.4-.8-.9-.7-2.1.5-3.7 3.3-3.7 6.7 0 1.9.8 3 2.1 3 1.4 0 2.4-1.2 2.4-3.1 0-1.1-.4-2.1-1.2-2.9Z" />
-      <path d="M17.4 13.8c-.9-.6-1.3-1.9-1.3-3 0-.5.4-.8.9-.7 2.1.5 3.7 3.3 3.7 6.7 0 1.9-.8 3-2.1 3-1.4 0-2.4-1.2-2.4-3.1 0-1.1.4-2.1 1.2-2.9Z" />
-    </g>
+  <svg className={className} width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+    <path d="M14 5H10a5 5 0 0 0-5 5v16a5 5 0 0 0 5 5h4" stroke="var(--ink)" strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M22 5h4a5 5 0 0 1 5 5v16a5 5 0 0 1-5 5h-4" stroke="var(--accent-fill)" strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M12 23V13l6 5 6-5v10" stroke="var(--accent-fill)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="18" cy="18" r="2.5" fill="var(--ink)"/>
   </svg>
 );

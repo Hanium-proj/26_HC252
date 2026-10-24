@@ -3,10 +3,10 @@
 @tailwind utilities;
 /* Chest AI · Quiet precision. Canonical rules: docs/DESIGN.md. */
 :root {
-  --canvas: #f5f5f7;
+  --canvas: #ffffff;
   --surface-1: #ffffff;
-  --surface-2: #f0f0f3;
-  --surface-hover: #e8e8ed;
+  --surface-2: #f5f9ff;
+  --surface-hover: #eef5ff;
   --ink: #1d1d1f;
   --ink-2: #51515a;
   --ink-3: #62626c;
@@ -1453,4 +1453,68 @@ button,input,textarea { font-family:inherit; }
   .topbar-veil nav { gap:4px; }
   .topbar-veil nav a { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:8px; flex:1; font-size:13px; border-radius:var(--r-md); }
   .topbar-veil nav a[aria-current="page"] { background:var(--accent-wash); }
+}
+
+/* White workspace, compact context and an expandable navigation rail. */
+.app-sidebar { width:240px; padding:28px 16px 20px; border-right:1px solid var(--hairline); }
+.app-sidebar.is-collapsed { width:80px; padding-inline:12px; }
+.brand-lockup { display:flex; align-items:center; gap:12px; padding:4px 12px; min-height:52px; margin-bottom:24px; color:var(--ink); }
+.brand-lockup svg { flex-shrink:0; }
+.brand-wordmark { display:flex; flex-direction:column; gap:4px; white-space:nowrap; }
+.brand-wordmark strong { font-size:23px; letter-spacing:-.04em; line-height:1.1; font-weight:700; }
+.brand-wordmark strong span { color:var(--accent-text); margin-left:4px; font-weight:400; }
+.brand-wordmark small { font-size:11px; color:var(--ink-2); letter-spacing:0; }
+.sidebar-toggle { display:flex; align-items:center; gap:8px; min-height:44px; padding:12px; margin-bottom:24px; color:var(--ink-2); border-radius:var(--r-md); text-align:left; }
+.sidebar-toggle:hover { background:var(--surface-2); color:var(--accent-text); }
+.sidebar-toggle span { font-size:12px; }
+.sidebar-toggle kbd { margin-left:auto; font:10px var(--font-mono); color:var(--ink-3); white-space:nowrap; }
+.app-sidebar nav a.sidebar-link { position:relative; display:flex; align-items:center; gap:12px; min-height:48px; padding:12px; margin-bottom:8px; }
+.sidebar-link-label { animation:page-enter 180ms var(--ease-out); white-space:nowrap; }
+.nav-current-dot { width:5px; height:5px; border-radius:50%; margin-left:auto; background:var(--accent-fill); }
+.sidebar-tooltip { position:absolute; left:calc(100% + 12px); top:50%; transform:translate(4px,-50%); opacity:0; pointer-events:none; padding:8px 12px; border-radius:10px; background:var(--ink); color:var(--surface-1); font-size:13px; white-space:nowrap; box-shadow:var(--shadow-2); transition:opacity 150ms var(--ease-out),transform 150ms var(--ease-out); }
+.sidebar-link:hover .sidebar-tooltip,.sidebar-link:focus-visible .sidebar-tooltip { opacity:1; transform:translate(0,-50%); }
+.is-collapsed .brand-lockup { padding:4px 10px; }
+.is-collapsed .sidebar-toggle { justify-content:center; }
+.is-collapsed nav a.sidebar-link { justify-content:center; padding:12px; }
+.is-collapsed .nav-current-dot { position:absolute; right:5px; top:8px; }
+.sidebar-footnote { margin-top:auto; display:flex; align-items:flex-start; gap:12px; padding:20px 8px 0; border-top:1px solid var(--hairline); }
+.research-seal { display:grid; place-items:center; flex-shrink:0; width:32px; height:32px; border:1px solid var(--border); border-radius:50%; color:var(--ink-2); font:600 12px var(--font-mono); }
+.sidebar-footnote strong { font-size:11px; font-weight:600; }
+.sidebar-footnote p { font-size:11px; line-height:1.7; color:var(--ink-2); margin-top:4px; }
+.is-collapsed .sidebar-footnote { padding-inline:0; justify-content:center; }
+.topbar-veil { background:color-mix(in srgb,var(--surface-1) 94%,transparent); border-bottom:1px solid var(--hairline); }
+.breadcrumb-home:hover { color:var(--accent-text); }
+.topbar-context { display:flex; align-items:center; gap:12px; min-width:0; }
+.topbar-study { font-size:12px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2); }
+.connection-label { font-size:11px; color:var(--accent-text); padding:4px 8px; border-radius:6px; background:var(--accent-wash); white-space:nowrap; }
+.connection-label.is-error { background:var(--critical-wash); color:var(--critical-text); }
+.workspace-main { padding-top:24px; }
+.page-heading { margin-bottom:24px; }
+.page-heading h1 { font-size:clamp(28px,2.3vw,36px); }
+.page-heading .eyebrow { margin-bottom:8px; }
+.journey-nav { gap:0; margin-bottom:28px; border-bottom:1px solid var(--hairline); }
+.journey-item { position:relative; background:transparent; padding:12px 16px 16px; border-radius:0; }
+.journey-item:hover { background:var(--surface-2); }
+.journey-item.is-current { background:transparent; box-shadow:none; }
+.journey-item.is-current::after { content:""; position:absolute; height:2px; bottom:-1px; left:16px; right:16px; border-radius:2px; background:var(--accent-fill); }
+.journey-item > span { display:grid; place-items:center; width:24px; height:24px; border:1px solid var(--border); border-radius:50%; opacity:1; font-size:10px; flex-shrink:0; }
+.journey-item.is-current > span { background:var(--accent-fill); color:var(--accent-ink); border-color:var(--accent-fill); }
+.study-bar { padding:12px 0; border-radius:0; border-top:1px solid var(--hairline); border-bottom:1px solid var(--hairline); margin-bottom:20px; }
+.study-icon { background:transparent; }
+.study-label .eyebrow { display:none; }
+.study-bar .select-trigger { min-height:44px; border-color:var(--border); }
+.study-bar .select-trigger:focus-visible { border-color:var(--accent-fill); }
+.ui-card,.chat-panel,.search-hero,.upload-surface { border:1px solid var(--hairline); }
+.metric-grid .ui-card:first-child { border:1px solid var(--hairline); }
+.analysis-status { padding:12px 20px; border:1px solid var(--ok-wash); background:var(--surface-1); }
+.analysis-status strong { color:var(--ok-text); }
+.analysis-status .btn-primary { min-height:40px; padding:8px 16px; }
+@media(max-width:1023px) { .topbar-study { max-width:180px; } }
+@media(max-width:640px) {
+  .topbar-context { margin-left:auto; }
+  .topbar-study { display:none; }
+  .journey-item { padding:12px 4px; }
+  .journey-item > span { display:none; }
+  .journey-item.is-current::after { left:4px; right:4px; }
+  .study-bar { padding:12px 0; }
 }
