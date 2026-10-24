@@ -226,12 +226,13 @@ function Chat() {
                 ? "주요 소견을 요약하거나, 판단의 근거와 불확실한 부분을 질문해 보세요."
                 : "먼저 문헌에 관해 질문하거나, 영상을 분석해 검사 기반 대화를 시작하세요."}
             </p>
+            <p className="suggestion-hint">추천 질문을 선택한 뒤 내용을 수정하고 보내세요.</p>
             <div className="suggestion-grid">
               {suggestions.map(([title, text]) => (
                 <button
                   className="suggestion"
                   key={title}
-                  onClick={() => void send(undefined, text)}
+                  onClick={() => { setQuery(text); textarea.current?.focus(); }}
                 >
                   <strong>
                     {title} <span className="!inline !text-accent">↗</span>
@@ -274,6 +275,7 @@ function Chat() {
                 {busy && i === messages.length - 1 && (
                   <span className="caret" aria-hidden="true" />
                 )}
+                {message.role === "assistant" && message.content && !(busy && i === messages.length - 1) && <CopyAnswer text={message.content} />}
                 {message.incomplete && (
                   <p className="mt-2 text-xs text-warning">
                     중단된 답변입니다. 질문을 다시 보내 확인해 주세요.
@@ -505,4 +507,12 @@ function Answer({ text }: { text: string }) {
       )}
     </div>
   );
+}
+
+function CopyAnswer({text}: {text: string}) {
+  const [status, setStatus] = useState("");
+  return <div className="answer-actions"><button type="button" className="btn-secondary" onClick={async () => {
+    try { await navigator.clipboard.writeText(text); setStatus("답변을 복사했습니다"); }
+    catch { setStatus("복사하지 못했습니다. 답변을 선택해 복사하세요."); }
+  }}>답변 복사</button><span role="status">{status}</span></div>;
 }

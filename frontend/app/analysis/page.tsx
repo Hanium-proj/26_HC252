@@ -90,6 +90,11 @@ function AnalysisForm({ study }: { study: Study }) {
     priorId !== (saved.prior_id ?? "") ||
     patientRef !== (saved.patient_ref ?? "");
   const result = !dirty && !busy ? analysis : null;
+  useEffect(() => {
+    if (!result || window.location.hash !== "#results") return;
+    resultsRef.current?.focus({ preventScroll: true });
+    resultsRef.current?.scrollIntoView({ block: "start" });
+  }, [result]);
   async function run(analyze = true) {
     if (busy) return;
     setElapsed(0);
@@ -293,10 +298,11 @@ function AnalysisForm({ study }: { study: Study }) {
       </div>
       {result ? (
         <section
+          id="results"
           ref={resultsRef}
           tabIndex={-1}
           aria-label="분석 결과"
-          className="scroll-mt-64 lg:scroll-mt-44 space-y-5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+          className="scroll-mt-24 space-y-5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <Card
             title="분석 완료 · 주요 소견"
@@ -309,7 +315,7 @@ function AnalysisForm({ study }: { study: Study }) {
               <Link href="/evidence" className={buttonClass}>
                 영상 근거 확인 →
               </Link>
-              <Link href="/agent" className={buttonClass}>
+              <Link href="/agent" className="btn-secondary">
                 AI에게 결과 질문 →
               </Link>
             </div>

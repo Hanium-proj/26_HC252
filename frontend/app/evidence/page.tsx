@@ -148,9 +148,10 @@ export default function EvidencePage() {
         </div>
       ) : (
         <Empty>
-          먼저{" "}
-          <Link href="/analysis" className="text-accent">
-            실제 분석을 실행해 주세요 →
+          <strong>{selected ? "분석 후 영상 근거를 확인할 수 있습니다" : "먼저 살펴볼 영상을 등록하세요"}</strong>
+          <p className="mt-2 mb-5">{selected ? "영상 분석을 완료하면 소견별 활성 지도와 해부학적 분할이 이곳에 표시됩니다." : "검사를 등록하고 분석하면 원본과 근거 레이어를 비교할 수 있습니다."}</p>
+          <Link href={selected ? "/analysis" : "/"} className="btn-primary">
+            {selected ? "영상 분석으로 이동" : "검사 등록으로 이동"} →
           </Link>
         </Empty>
       )}

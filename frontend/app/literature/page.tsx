@@ -38,23 +38,28 @@ function SearchPanel() {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const input = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   async function search(event: FormEvent) {
     event.preventDefault();
-    if (query.trim().length < 2) return;
+    if (busy || query.trim().length < 2) return;
     controller.current?.abort();
     const ac = new AbortController();
     controller.current = ac;
     setBusy(true);
     setError("");
-    setStored(null);
+    setNotice("");
     try {
       const response = await api<SearchResult>(
         `/${scope === "cases" || scope === "public-cases" ? "cases" : "literature"}/search?q=${encodeURIComponent(query.trim())}&top_k=5&public=${scope.startsWith("public")}`,
         { signal: ac.signal },
       );
-      setStored({ result: response, scope });
+      if (!ac.signal.aborted) {
+        setStored({ result: response, scope });
+        setNotice(`${response.hits.length}건의 검색 결과를 찾았습니다.`);
+      }
     } catch (e) {
       if (!ac.signal.aborted)
         setError(e instanceof Error ? e.message : "검색 실패");
@@ -83,6 +88,7 @@ function SearchPanel() {
         <form onSubmit={search} className="space-y-3">
           <div className="flex gap-3">
             <input
+              ref={input}
               aria-label="문헌 검색 질문"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -93,9 +99,7 @@ function SearchPanel() {
               required
               minLength={2}
             />
-            <button className={`${buttonClass} shrink-0`} disabled={busy}>
-              {busy ? "실제 문헌 검색 중…" : "검색"}
-            </button>
+            {busy ? <button type="button" className="btn-secondary shrink-0" onClick={(event) => { event.preventDefault(); controller.current?.abort(); setBusy(false); setNotice("검색을 중지했습니다. 이전 결과는 유지됩니다."); }}>검색 중지</button> : <button className={`${buttonClass} shrink-0`} disabled={query.trim().length < 2}>검색</button>}
           </div>
           <div className="flex items-center gap-3 text-sm text-ink-2">
             <span className="shrink-0">검색 대상</span>
@@ -128,7 +132,7 @@ function SearchPanel() {
                 disabled={busy}
                 className="topic-chip"
                 key={text}
-                onClick={() => setQuery(text)}
+                onClick={() => { setQuery(text); input.current?.focus(); }}
               >
                 {text} ↗
               </button>
@@ -137,6 +141,7 @@ function SearchPanel() {
         </form>
       </Card>
       <ErrorBox message={error} />
+      {notice && <p className="text-sm text-ink-2" role="status">{notice}</p>}
       {busy && <Loading label="관련 문헌을 찾고 있습니다" />}
       {!busy && !result && (
         <div className="workflow-strip">

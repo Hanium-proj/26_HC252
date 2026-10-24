@@ -71,7 +71,7 @@ export function StudySelect({
       </div>
       {selected && (
         <span
-          className={`status-pill ${selected.analysis ? "is-complete" : ""}`}
+          className={`status-pill ${!running && selected.analysis ? "is-complete" : ""}`}
         >
           <span />
           {running

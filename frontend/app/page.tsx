@@ -1,10 +1,11 @@
 "use client";
-import { PageHeading, Loading } from "@/components/controls";
+import { PageHeading, Loading, Select } from "@/components/controls";
 import { WorkflowLink as Link } from "@/components/workflow";
 import { useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/live/api";
 import { useWorkspace } from "@/lib/live/store";
+import { useSessionValue } from "@/lib/live/session";
 import type { Study } from "@/lib/live/types";
 import {
   Card,
@@ -20,7 +21,14 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useSessionValue("worklist-query", "");
+  const [filter, setFilter] = useSessionValue("worklist-filter", "all");
+  const [order, setOrder] = useSessionValue("worklist-order", "newest");
+  const stateOf = (study: Study) => jobs[study.id]?.status === "running" ? "running" : study.analysis ? "complete" : "pending";
+  const visibleStudies = studies.filter((study) =>
+    `${study.name} ${study.id}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (filter === "all" || stateOf(study) === filter)
+  ).sort((a,b) => order === "name" ? a.name.localeCompare(b.name, "ko") : Date.parse(b.created_at) - Date.parse(a.created_at));
   const file = useRef<HTMLInputElement>(null);
   const router = useRouter();
   async function upload(event: ChangeEvent<HTMLInputElement>) {
@@ -158,26 +166,28 @@ export default function Dashboard() {
         title="검사 워크리스트"
         sub={`업로드한 실제 검사만 표시합니다. PNG·JPEG·단일 프레임 흑백 DICOM, 최대 ${maxUploadMb}MB.`}
       >
+        <div className="worklist-toolbar">
         <input
           aria-label="검사 검색"
-          className={`${inputClass} mb-4 max-w-md`}
+          className={inputClass}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="파일명 또는 검사 ID 검색"
         />
+        <Select label="검사 정렬" value={order} onChange={setOrder} options={[{value:"newest",label:"최근 등록순"},{value:"name",label:"파일명순"}]} />
+        </div>
+        <div className="worklist-filters" aria-label="검사 상태 필터">
+          {[["all","전체"],["pending","분석 대기"],["running","분석 중"],["complete","분석 완료"]].map(([value,label]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}<span>{studies.filter(s => value === "all" || stateOf(s) === value).length}</span></button>)}
+          <span className="result-count" role="status">{visibleStudies.length}건 표시</span>
+        </div>
         {loading ? (
           <Loading label="검사 목록을 불러오고 있습니다" />
         ) : !studies.length ? (
           <Empty>등록된 검사가 없습니다. 새 X-ray를 업로드해 주세요.</Empty>
         ) : (
           <div className="overflow-x-auto">
-            {!studies.some((s) =>
-              `${s.name} ${s.id}`.toLowerCase().includes(query.toLowerCase()),
-            ) && (
-              <Empty>
-                검색어와 일치하는 검사가 없습니다. 파일명 또는 검사 ID를
-                확인하세요.
-              </Empty>
+            {!visibleStudies.length && (
+              <Empty><strong>조건에 맞는 검사가 없습니다</strong><p>검색어 또는 분석 상태를 바꿔 보세요.</p><button className="btn-secondary mt-4" onClick={() => {setQuery("");setFilter("all");}}>필터 초기화</button></Empty>
             )}
             <table className="study-table w-full text-left text-sm">
               <thead className="text-xs text-ink-3">
@@ -196,12 +206,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {studies
-                  .filter((s) =>
-                    `${s.name} ${s.id}`
-                      .toLowerCase()
-                      .includes(query.toLowerCase()),
-                  )
+                {visibleStudies
                   .map((s) => (
                     <tr key={s.id} className="border-t border-hairline">
                       <td className="p-3">
@@ -232,10 +237,10 @@ export default function Dashboard() {
                       </td>
                       <td className="p-3">
                         <Link
-                          href={`/analysis?study=${s.id}`}
+                          href={`/analysis?study=${s.id}${s.analysis && stateOf(s) !== "running" ? "#results" : ""}`}
                           className="btn-secondary"
                         >
-                          검사 열기 →
+                          {stateOf(s) === "running" ? "진행 확인" : s.analysis ? "결과 보기" : "분석 시작"} →
                         </Link>
                       </td>
                     </tr>
