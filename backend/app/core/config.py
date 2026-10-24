@@ -8,8 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # utf-8-sig: Windows 에디터가 .env 앞에 붙이는 BOM 을 무시한다. BOM 이 있으면
+    # 첫 줄 키가 '﻿OPENAI_API_KEY' 로 읽혀 조용히 빈 값이 된다.
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=".env", env_file_encoding="utf-8-sig", extra="ignore"
     )
 
     app_name: str = "chest-ai-backend"

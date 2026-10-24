@@ -24,48 +24,60 @@ CLAIM = "pleural_effusion"
 
 def gate(quality=0.9) -> EvidenceItem:
     return EvidenceItem(
-        source=ToolName.GATEKEEPER, claim=f"{{'quality': {quality}}}",
-        evidence_type=EvidenceType.MODEL, confidence=0.9,
+        source=ToolName.GATEKEEPER,
+        claim=f"{{'quality': {quality}}}",
+        evidence_type=EvidenceType.MODEL,
+        confidence=0.9,
         metadata={"view": "AP", "quality": quality},
     )
 
 
 def clf(prob=0.82, finding=CLAIM) -> EvidenceItem:
     return EvidenceItem(
-        source=ToolName.CLASSIFIER, claim=f"{{'finding': '{finding}'}}",
-        evidence_type=EvidenceType.MODEL, confidence=prob,
+        source=ToolName.CLASSIFIER,
+        claim=f"{{'finding': '{finding}'}}",
+        evidence_type=EvidenceType.MODEL,
+        confidence=prob,
         metadata={"finding": finding, "probability": prob},
     )
 
 
 def loc(region="left_lower_lung", finding=CLAIM) -> EvidenceItem:
     return EvidenceItem(
-        source=ToolName.LOCALIZER, claim=f"{{'region': '{region}'}}",
-        evidence_type=EvidenceType.MODEL, confidence=0.7,
+        source=ToolName.LOCALIZER,
+        claim=f"{{'region': '{region}'}}",
+        evidence_type=EvidenceType.MODEL,
+        confidence=0.7,
         metadata={"finding": finding, "region": region},
     )
 
 
 def vqa(answer="blunting seen") -> EvidenceItem:
     return EvidenceItem(
-        source=ToolName.VQA, claim=f"{{'answer': '{answer}'}}",
-        evidence_type=EvidenceType.MODEL, confidence=0.4,
+        source=ToolName.VQA,
+        claim=f"{{'answer': '{answer}'}}",
+        evidence_type=EvidenceType.MODEL,
+        confidence=0.4,
         metadata={"finding": CLAIM, "answer": answer},
     )
 
 
 def case(ratio=0.8) -> EvidenceItem:
     return EvidenceItem(
-        source=ToolName.CASE, claim=f"유사 사례 중 {ratio}",
-        evidence_type=EvidenceType.CASE, confidence=0.6,
+        source=ToolName.CASE,
+        claim=f"유사 사례 중 {ratio}",
+        evidence_type=EvidenceType.CASE,
+        confidence=0.6,
         metadata={"finding": CLAIM, "agreement_ratio": ratio, "quality": 0.5},
     )
 
 
 def lit() -> EvidenceItem:
     return EvidenceItem(
-        source=ToolName.KNOWLEDGE, claim="Transudate versus exudate...",
-        evidence_type=EvidenceType.LITERATURE, confidence=0.7,
+        source=ToolName.KNOWLEDGE,
+        claim="Transudate versus exudate...",
+        evidence_type=EvidenceType.LITERATURE,
+        confidence=0.7,
         metadata={"finding": CLAIM, "quality": 0.9, "doc_id": "GL004", "page": 12},
     )
 
@@ -132,8 +144,10 @@ class TestClaimCanonicalization:
 
     def test_case_and_model_evidence_group_together(self):
         case_item = EvidenceItem(
-            source=ToolName.CASE, claim="유사 사례",
-            evidence_type=EvidenceType.CASE, confidence=0.6,
+            source=ToolName.CASE,
+            claim="유사 사례",
+            evidence_type=EvidenceType.CASE,
+            confidence=0.6,
             metadata={"finding": "Pleural Effusion", "agreement_ratio": 0.8},
         )
         ns = normalize(packet([gate(), clf()]), [case_item])
@@ -163,8 +177,11 @@ class TestVerdictDerivation:
 
     def test_claim_key_falls_back_to_plan_target(self):
         it = EvidenceItem(
-            source=ToolName.VQA, claim="x", evidence_type=EvidenceType.MODEL,
-            confidence=0.5, metadata={"answer": "yes"},
+            source=ToolName.VQA,
+            claim="x",
+            evidence_type=EvidenceType.MODEL,
+            confidence=0.5,
+            metadata={"answer": "yes"},
         )
         assert norm([gate(), it])[0].claim_key == CLAIM
 
@@ -209,11 +226,18 @@ class TestResolveClaim:
         assert resolve_claim(CLAIM, [], missing=False).verdict is Verdict.NEED_MORE_EVIDENCE
 
     def test_conflict_produces_caution(self):
-        ns = norm([gate(), clf(0.9), loc()])
-        ns[0].verdict = False  # classifier 를 반대로 뒤집어 충돌 구성
+        ns = norm([gate(), clf(0.2), loc()])  # classifier 반대(1-p=0.8) vs localizer 지지
         v = resolve_claim(CLAIM, ns, missing=False)
         assert v.verdict is Verdict.CAUTION
         assert v.conflict is not None
+
+    def test_strong_negative_is_strong_opposition(self):
+        """반대 확신도는 1-p. 확실한 음성일수록 반대 점수가 커야 한다."""
+        weak = score(norm([gate(), clf(0.45)])[0])
+        strong = score(norm([gate(), clf(0.05)])[0])
+        assert strong > weak
+        v = resolve_claim(CLAIM, norm([gate(), clf(0.05)]), missing=False)
+        assert v.verdict is Verdict.REJECT
 
     def test_model_evidence_breaks_tie_over_literature(self):
         """문헌은 일반론이고 영상은 이 환자의 사실이다."""
@@ -274,3 +298,12 @@ class TestResolve:
     async def test_task_type_carried_through(self):
         final = await resolve(packet([gate(), clf()]))
         assert final.task_type is TaskType.FINDING_PRESENCE
+
+
+@pytest.mark.parametrize("region,proxy", [("outside_lung_field", False), ("lung_field", False)])
+def test_failed_cam_proxy_is_not_support_or_opposition(region, proxy):
+    item = loc(region=region)
+    item.metadata["proxy_pass"] = proxy
+    from app.trust.normalize import normalize_item
+
+    assert normalize_item(item, CLAIM, 0.9).verdict is None

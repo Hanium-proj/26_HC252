@@ -51,3 +51,6 @@ mimic-cxr-*
 /knowledge_chunks.json
 /glass_agent_handoff*.tar.gz
 /README_GLASS_HANDOFF.md
+
+# Private replay predictions and reports
+backend/outputs/

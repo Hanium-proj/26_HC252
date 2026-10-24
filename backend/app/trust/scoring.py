@@ -47,4 +47,9 @@ def score(n: Normalized) -> float:
         return 0.0
     prior = TOOL_PRIOR.get(n.item.source, 0.5)
     type_w = TYPE_WEIGHT.get(n.item.evidence_type, 0.5)
-    return round(prior * type_w * n.item.confidence * n.quality, 4)
+    conf = n.item.confidence
+    if n.item.source is ToolName.CLASSIFIER and n.verdict is False:
+        # 반대 근거의 확신도는 '양성이 아닐 확률' 1 - p 이다.
+        # p 를 그대로 쓰면 강한 음성(p≈0)일수록 반대 근거가 약해지는 역전이 생긴다.
+        conf = 1.0 - conf
+    return round(prior * type_w * conf * n.quality, 4)

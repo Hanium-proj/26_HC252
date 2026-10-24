@@ -108,6 +108,8 @@ def _verdict(item: EvidenceItem) -> bool | None:
         return None
 
     if src is ToolName.LOCALIZER:
+        if md.get("proxy_pass") is False or md.get("region") == "outside_lung_field":
+            return None
         # 위치를 짚었다는 것 자체가 소견 존재의 근거다
         region = md.get("region") or md.get("location")
         return bool(region) if region is not None else None

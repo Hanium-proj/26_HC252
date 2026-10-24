@@ -80,3 +80,12 @@ npm audit
 검색 평가는 기존 8개 질문을 한국어·영어로 측정하는 작은 개발 회귀 세트다. 임상 진단 정확도나 독립 검색 성능을 입증하지 않는다. 실제 독립 정답 영상이 준비되면 `scripts/eval_classifier_manifest.py`로 AUROC/AP/민감도/특이도와 추론 시간을 측정할 수 있다. 모델 학습 데이터와 평가 데이터의 환자 중복 여부를 먼저 확인해야 한다.
 
 자세한 실행 검증 결과와 한계는 [docs/LIVE_VERIFICATION.md](docs/LIVE_VERIFICATION.md)를 참고한다.
+
+## 팀 브랜치 통합
+
+`feat/agent-a4-trust-v2`의 사전 예측 재생 파이프라인도 main에 포함됩니다.
+실시간 업로드 분석은 기존 `/analyze`, `/agent/stream`을 사용하며, 사전 산출물 평가는
+`/agent/replay/run`, `/agent/replay/stream`을 사용합니다. `/agent/run`은 재생 API의 호환 별칭입니다.
+재생 모듈은 `app/agents/replay/`, 공통 진입점은 `app/agents/pipeline.py`에 있습니다.
+팀의 예측 CSV/CAM 파일과 `GLASS_HANDOFF_DIR` 설정이 필요하며, 없으면 API가 503으로 알립니다.
+기존 논문 사례 보고서는 당시 실행 결과이며, 현재 코드에서 재생성한 수치가 아닙니다.

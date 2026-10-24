@@ -182,3 +182,28 @@ def test_non_chest_input_cannot_produce_analysis(api, monkeypatch):
     monkeypatch.setattr(live, "describe", reject)
     assert api.post("/analyze", json={"case_id": case["id"]}).status_code == 422
     assert get_case(case["id"])["analysis"] is None
+
+
+@pytest.mark.parametrize("path", ["/agent/replay/run", "/agent/replay/stream", "/agent/run"])
+def test_replay_requires_auth_and_actual_artifacts(api, monkeypatch, tmp_path, path):
+    from app.tools.vision._store import get_store
+
+    monkeypatch.setenv("GLASS_HANDOFF_DIR", str(tmp_path / "missing-artifacts"))
+    monkeypatch.delenv("GLASS_PREDICTIONS_CSV", raising=False)
+    get_store.cache_clear()
+    try:
+        body = {"query": "기흉이 있나요?", "image_ref": "missing-image"}
+        assert api.post(path, json=body, headers={"X-API-Key": "incorrect"}).status_code == 401
+        response = api.post(path, json=body)
+        assert response.status_code == 503
+        assert "GLASS_HANDOFF_DIR" in response.json()["detail"]
+    finally:
+        get_store.cache_clear()
+
+
+def test_live_and_replay_endpoints_are_distinct():
+    from app.api.routes import agent, replay
+
+    routes = {(route.path, route.endpoint) for route in app.routes if hasattr(route, "endpoint")}
+    assert ("/agent/stream", agent.stream) in routes
+    assert ("/agent/replay/stream", replay.stream) in routes

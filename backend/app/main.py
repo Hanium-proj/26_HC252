@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import require_api_key
-from app.api.routes import agent, analyze, cases, health, literature, studies
+from app.api.routes import agent, analyze, cases, health, literature, replay, studies
 from app.core.ai import client, limiter
 from app.core.config import get_settings
 
@@ -66,5 +66,12 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
-for router in (analyze.router, literature.router, cases.router, agent.router, studies.router):
+for router in (
+    analyze.router,
+    literature.router,
+    cases.router,
+    agent.router,
+    studies.router,
+    replay.router,
+):
     app.include_router(router, dependencies=[Depends(require_api_key)])
