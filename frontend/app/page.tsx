@@ -246,7 +246,7 @@ export default function Dashboard() {
         )}
       </Card>
       <p className="text-xs text-ink-3">
-        업로드 영상과 임상 메모는 로컬 서버에 저장되며 분석 요청 시 OpenAI로
+        업로드 영상과 임상 메모는 작업 공간 서버에 저장되며 분석 요청 시 OpenAI로
         전달됩니다. 연구용이며 진료 결정을 대체하지 않습니다.
       </p>
     </div>
