@@ -22,7 +22,7 @@ export function Topbar() {
         {title}
       </p>
       <span className="text-xs text-ink-3">
-        {error ? "서버 연결 확인 필요" : "RESEARCH · 로컬 워크스페이스"}
+        {error ? "서버 연결 확인 필요" : "RESEARCH · 연구 워크스페이스"}
       </span>
       <nav
         aria-label="모바일 메뉴"
